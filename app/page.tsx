@@ -1,12 +1,12 @@
 export default function Home() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
+    <div className="min-h-screen bg-linear-to-br from-blue-50 via-white to-purple-50">
       {/* Hero Section */}
       <main className="container mx-auto px-4 py-16">
         <div className="flex flex-col items-center justify-center min-h-[80vh] text-center">
           {/* Logo/Title */}
           <div className="mb-8">
-            <h1 className="text-6xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-4">
+            <h1 className="text-6xl font-bold bg-linear-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-4">
               RupeeMate
             </h1>
             <p className="text-xl text-gray-600 max-w-2xl mx-auto">
@@ -43,7 +43,7 @@ export default function Home() {
 
           {/* CTA Button */}
           <div className="mt-12">
-            <button className="px-8 py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-full text-lg font-semibold hover:shadow-lg transition-all hover:scale-105">
+            <button className="px-8 py-4 bg-linear-to-r from-blue-600 to-purple-600 text-white rounded-full text-lg font-semibold hover:shadow-lg transition-all hover:scale-105">
               Get Started
             </button>
           </div>
