@@ -1,31 +1,35 @@
 /**
  * RECEIPTS PAGE (Coming Soon)
+ * Receipt scanning needs file storage and text recognition, which this
+ * browser-only version does not have yet.
  */
 
-"use client"
-
+import type { Metadata } from "next"
+import Link from "next/link"
 import { Receipt } from "lucide-react"
+import PageShell from "@/components/PageShell"
+
+export const metadata: Metadata = { title: "Receipts" }
 
 export default function ReceiptsPage() {
   return (
-    <div className="min-h-screen relative overflow-hidden cyber-grid">
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute inset-0 cyber-grid animate-grid-pulse"></div>
-        <div className="scanline-overlay"></div>
-      </div>
-
-      <main className="container mx-auto px-6 py-12 relative z-10">
-        <div className="flex flex-col items-center justify-center min-h-[70vh]">
-          <div className="holo-card p-12 rounded-2xl neon-border-yellow text-center max-w-2xl">
-            <Receipt className="w-16 h-16 neon-text-yellow mx-auto mb-6 animate-float" />
-            <h1 className="text-5xl font-bungee holographic mb-4">RECEIPTS</h1>
-            <p className="text-2xl font-orbitron font-bold neon-text-yellow mb-6">COMING SOON</p>
-            <p className="font-rajdhani text-lg text-cyan-100 leading-relaxed">
-              Upload and manage receipts, scan them automatically, and never lose a bill!
-            </p>
-          </div>
+    <PageShell title="RECEIPTS" subtitle="Attach and scan receipts">
+      <div className="max-w-2xl mx-auto text-center">
+        <div className="holo-card p-10 rounded-2xl neon-border-cyan">
+          <Receipt className="w-16 h-16 neon-text-cyan mx-auto mb-6 animate-float" aria-hidden="true" />
+          <p className="text-2xl font-orbitron font-bold neon-text-cyan mb-4">NOT AVAILABLE YET</p>
+          <p className="font-rajdhani text-lg text-cyan-100 leading-relaxed mb-6">
+            Receipt attachments and scanning are planned, but they need secure file storage that this
+            browser-only version does not have. Your expenses are not affected.
+          </p>
+          <Link
+            href="/expenses"
+            className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-cyan-400/10 border border-cyan-400/30 hover:bg-cyan-400/20 hover:border-cyan-400/50 font-orbitron text-sm neon-text-cyan"
+          >
+            BACK TO EXPENSES
+          </Link>
         </div>
-      </main>
-    </div>
+      </div>
+    </PageShell>
   )
 }

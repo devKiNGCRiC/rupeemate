@@ -1,21 +1,20 @@
 import type { NextConfig } from "next";
 
+// Basic hardening headers for every route. A strict Content-Security-Policy is
+// deliberately not set here: Next.js needs a per-request nonce for that.
+const securityHeaders = [
+  { key: "X-Content-Type-Options", value: "nosniff" },
+  { key: "X-Frame-Options", value: "DENY" },
+  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+  { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+];
+
 const nextConfig: NextConfig = {
-  /* config options here */
   reactCompiler: true,
-  
-  // Optimize for faster page loads
-  compress: true,
-  
-  // Optimize images
-  images: {
-    formats: ['image/avif', 'image/webp'],
-    minimumCacheTTL: 60,
-  },
-  
-  // Enable experimental features for better performance
-  experimental: {
-    optimizePackageImports: ['lucide-react'],
+  poweredByHeader: false,
+
+  async headers() {
+    return [{ source: "/:path*", headers: securityHeaders }];
   },
 };
 

@@ -1,36 +1,28 @@
 /**
  * EXPENSE FORM - BASIC & ADVANCED MODES
- * 
+ *
  * Basic Mode: Quick entry with essential fields
  * Advanced Mode: Comprehensive tracking with extra fields for detailed insights
  */
 
 "use client"
 
-import { useState } from "react"
-import { 
+import { useId, useState } from "react"
+import {
   Plus, AlertCircle, IndianRupee, CreditCard, Wallet as WalletIcon,
   Smartphone, Building, Tag, FileText, Repeat, MapPin, Calendar,
   Clock, Users, ChevronDown, Sparkles
 } from "lucide-react"
+import {
+  CATEGORIES,
+  MAX_AMOUNT,
+  PAYMENT_METHODS,
+  RECURRING_OPTIONS,
+  isValidDateKey,
+  type ExpenseData,
+} from "@/lib/expenses"
 
-// Expense data interface
-export interface ExpenseData {
-  amount: number
-  category: string
-  subCategory?: string
-  date: string
-  time?: string
-  description: string
-  paymentMethod?: string
-  tags?: string[]
-  notes?: string
-  isRecurring?: boolean
-  recurringFrequency?: string
-  location?: string
-  splitWith?: string[]
-  receiptUrl?: string
-}
+export type { ExpenseData }
 
 interface ExpenseFormProps {
   onAddExpense: (expense: ExpenseData) => void
@@ -38,7 +30,19 @@ interface ExpenseFormProps {
   onModeChange: (mode: "basic" | "advanced") => void
 }
 
+const PAYMENT_ICONS = {
+  Cash: WalletIcon,
+  UPI: Smartphone,
+  Card: CreditCard,
+  "Net Banking": Building,
+} as const
+
+const splitList = (value: string) => value.split(",").map((t) => t.trim()).filter(Boolean)
+
 export default function ExpenseForm({ onAddExpense, mode, onModeChange }: ExpenseFormProps) {
+  const uid = useId()
+  const id = (name: string) => `${uid}-${name}`
+
   // Basic fields
   const [amount, setAmount] = useState("")
   const [category, setCategory] = useState("Food")
@@ -46,60 +50,41 @@ export default function ExpenseForm({ onAddExpense, mode, onModeChange }: Expens
   const [date, setDate] = useState("")
   const [time, setTime] = useState("")
   const [description, setDescription] = useState("")
-  
+
   // Advanced fields
-  const [paymentMethod, setPaymentMethod] = useState("Cash")
+  const [paymentMethod, setPaymentMethod] = useState<string>("Cash")
   const [tags, setTags] = useState("")
   const [notes, setNotes] = useState("")
   const [isRecurring, setIsRecurring] = useState(false)
   const [recurringFrequency, setRecurringFrequency] = useState("monthly")
   const [location, setLocation] = useState("")
   const [splitWith, setSplitWith] = useState("")
-  
+
   const [error, setError] = useState("")
-  const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const categories = [
-    { name: "Food", icon: "🍔", subCategories: ["Restaurant", "Groceries", "Delivery", "Coffee", "Snacks"] },
-    { name: "Transport", icon: "🚗", subCategories: ["Fuel", "Uber/Ola", "Metro", "Bus", "Parking"] },
-    { name: "Entertainment", icon: "🎮", subCategories: ["Movies", "Games", "Streaming", "Events", "Sports"] },
-    { name: "Shopping", icon: "🛍️", subCategories: ["Clothes", "Electronics", "Home", "Gifts", "Online"] },
-    { name: "Bills", icon: "💡", subCategories: ["Electricity", "Water", "Internet", "Phone", "Rent"] },
-    { name: "Health", icon: "⚕️", subCategories: ["Medicine", "Doctor", "Gym", "Insurance", "Wellness"] },
-    { name: "Other", icon: "📦", subCategories: ["Education", "Personal", "Investment", "Donation", "Misc"] },
-  ]
+  const currentCategory = CATEGORIES.find((c) => c.name === category)
 
-  const paymentMethods = [
-    { name: "Cash", icon: WalletIcon },
-    { name: "UPI", icon: Smartphone },
-    { name: "Card", icon: CreditCard },
-    { name: "Net Banking", icon: Building },
-  ]
-
-  const recurringOptions = [
-    { value: "daily", label: "Daily" },
-    { value: "weekly", label: "Weekly" },
-    { value: "monthly", label: "Monthly" },
-    { value: "yearly", label: "Yearly" },
-  ]
-
-  const currentCategory = categories.find(c => c.name === category)
-
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault()
     setError("")
-    setIsSubmitting(true)
 
-    if (!amount || !date || !description) {
+    if (!amount || !date || !description.trim()) {
       setError("Please fill all required fields")
-      setIsSubmitting(false)
       return
     }
 
-    const amountNum = parseFloat(amount)
-    if (isNaN(amountNum) || amountNum <= 0) {
+    if (!isValidDateKey(date)) {
+      setError("Please enter a valid date")
+      return
+    }
+
+    const amountNum = Math.round(parseFloat(amount) * 100) / 100
+    if (Number.isNaN(amountNum) || amountNum <= 0) {
       setError("Amount must be a positive number")
-      setIsSubmitting(false)
+      return
+    }
+    if (amountNum > MAX_AMOUNT) {
+      setError("Amount is too large. Please double-check it")
       return
     }
 
@@ -107,7 +92,7 @@ export default function ExpenseForm({ onAddExpense, mode, onModeChange }: Expens
       amount: amountNum,
       category,
       date,
-      description,
+      description: description.trim(),
     }
 
     // Add advanced fields if in advanced mode
@@ -115,17 +100,14 @@ export default function ExpenseForm({ onAddExpense, mode, onModeChange }: Expens
       expenseData.subCategory = subCategory || undefined
       expenseData.time = time || undefined
       expenseData.paymentMethod = paymentMethod
-      expenseData.tags = tags ? tags.split(",").map(t => t.trim()).filter(Boolean) : undefined
-      expenseData.notes = notes || undefined
-      expenseData.isRecurring = isRecurring
+      expenseData.tags = tags ? splitList(tags) : undefined
+      expenseData.notes = notes.trim() || undefined
+      expenseData.isRecurring = isRecurring || undefined
       expenseData.recurringFrequency = isRecurring ? recurringFrequency : undefined
-      expenseData.location = location || undefined
-      expenseData.splitWith = splitWith ? splitWith.split(",").map(s => s.trim()).filter(Boolean) : undefined
+      expenseData.location = location.trim() || undefined
+      expenseData.splitWith = splitWith ? splitList(splitWith) : undefined
     }
 
-    // Simulate API delay for better UX
-    await new Promise(resolve => setTimeout(resolve, 300))
-    
     onAddExpense(expenseData)
 
     // Reset form
@@ -140,12 +122,11 @@ export default function ExpenseForm({ onAddExpense, mode, onModeChange }: Expens
     setLocation("")
     setSplitWith("")
     setError("")
-    setIsSubmitting(false)
   }
 
   return (
     <div className="holo-card p-5 md:p-6 rounded-2xl relative border border-cyan-400/20">
-      
+
       {/* Header with Mode Toggle */}
       <div className="mb-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
@@ -164,14 +145,12 @@ export default function ExpenseForm({ onAddExpense, mode, onModeChange }: Expens
           </div>
 
           {/* Mode Toggle */}
-          <div className="flex items-center gap-2 p-1 rounded-xl bg-black/40 border border-cyan-400/20 relative z-50">
+          <div className="flex items-center gap-2 p-1 rounded-xl bg-black/40 border border-cyan-400/20 relative z-10" role="group" aria-label="Form mode">
             <button
               type="button"
-              onClick={() => {
-                console.log("🔵 BASIC mode clicked!")
-                onModeChange("basic")
-              }}
-              className={`px-4 py-2 rounded-lg font-orbitron text-xs tracking-wider transition-all duration-300 relative z-50 cursor-pointer ${
+              aria-pressed={mode === "basic"}
+              onClick={() => onModeChange("basic")}
+              className={`px-4 py-2 rounded-lg font-orbitron text-xs tracking-wider transition-all duration-300 cursor-pointer ${
                 mode === "basic"
                   ? "bg-cyan-400/20 neon-text-cyan border border-cyan-400/40"
                   : "text-cyan-100/50 hover:text-cyan-100/80"
@@ -181,11 +160,9 @@ export default function ExpenseForm({ onAddExpense, mode, onModeChange }: Expens
             </button>
             <button
               type="button"
-              onClick={() => {
-                console.log("🌸 ADVANCED mode clicked!")
-                onModeChange("advanced")
-              }}
-              className={`px-4 py-2 rounded-lg font-orbitron text-xs tracking-wider transition-all duration-300 flex items-center gap-1.5 relative z-50 cursor-pointer ${
+              aria-pressed={mode === "advanced"}
+              onClick={() => onModeChange("advanced")}
+              className={`px-4 py-2 rounded-lg font-orbitron text-xs tracking-wider transition-all duration-300 flex items-center gap-1.5 cursor-pointer ${
                 mode === "advanced"
                   ? "bg-pink-400/20 neon-text-pink border border-pink-400/40"
                   : "text-cyan-100/50 hover:text-cyan-100/80"
@@ -196,44 +173,49 @@ export default function ExpenseForm({ onAddExpense, mode, onModeChange }: Expens
             </button>
           </div>
         </div>
-        
+
         <div className="w-full h-px bg-linear-to-r from-cyan-400/30 via-pink-400/30 to-transparent"></div>
       </div>
 
       {/* Error */}
       {error && (
-        <div className="mb-5 p-3 rounded-xl bg-pink-500/10 border border-pink-400/30 flex items-center gap-3">
+        <div id={id("error")} role="alert" className="mb-5 p-3 rounded-xl bg-pink-500/10 border border-pink-400/30 flex items-center gap-3">
           <AlertCircle className="w-4 h-4 neon-text-pink shrink-0" />
           <p className="font-rajdhani text-pink-200 text-sm">{error}</p>
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-5">
-        
+      <form onSubmit={handleSubmit} className="space-y-5" noValidate>
+
         {/* ============================================
             BASIC FIELDS (Always Visible)
             ============================================ */}
-        
+
         {/* Amount & Date Row */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {/* Amount */}
           <div>
-            <label className="flex items-center gap-2 mb-2 font-orbitron text-[10px] uppercase tracking-wider neon-text-cyan">
+            <label htmlFor={id("amount")} className="flex items-center gap-2 mb-2 font-orbitron text-[10px] uppercase tracking-wider neon-text-cyan">
               <span className="w-1 h-1 rounded-full bg-cyan-400"></span>
-              Amount (₹) <span className="text-pink-400">*</span>
+              Amount (₹) <span className="text-pink-400" aria-hidden="true">*</span>
             </label>
             <div className="relative group">
               <div className="absolute left-3 top-1/2 -translate-y-1/2 w-7 h-7 rounded-lg bg-green-400/10 flex items-center justify-center">
                 <IndianRupee className="w-3.5 h-3.5 neon-text-green" />
               </div>
               <input
+                id={id("amount")}
                 type="text"
                 inputMode="decimal"
+                autoComplete="off"
+                required
+                aria-required="true"
+                aria-invalid={error && !amount ? true : undefined}
                 value={amount}
                 onChange={(e) => {
                   const value = e.target.value
-                  // Allow only numbers and decimal point
-                  if (value === '' || /^\d*\.?\d*$/.test(value)) {
+                  // Allow only numbers and up to two decimal places
+                  if (value === '' || /^\d*\.?\d{0,2}$/.test(value)) {
                     setAmount(value)
                   }
                 }}
@@ -245,16 +227,20 @@ export default function ExpenseForm({ onAddExpense, mode, onModeChange }: Expens
 
           {/* Date */}
           <div>
-            <label className="flex items-center gap-2 mb-2 font-orbitron text-[10px] uppercase tracking-wider neon-text-purple">
+            <label htmlFor={id("date")} className="flex items-center gap-2 mb-2 font-orbitron text-[10px] uppercase tracking-wider neon-text-purple">
               <span className="w-1 h-1 rounded-full bg-purple-400"></span>
-              Date <span className="text-pink-400">*</span>
+              Date <span className="text-pink-400" aria-hidden="true">*</span>
             </label>
             <div className="relative">
               <div className="absolute left-3 top-1/2 -translate-y-1/2 w-7 h-7 rounded-lg bg-purple-400/10 flex items-center justify-center">
                 <Calendar className="w-3.5 h-3.5 neon-text-purple" />
               </div>
               <input
+                id={id("date")}
                 type="date"
+                required
+                aria-required="true"
+                aria-invalid={error && !date ? true : undefined}
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
                 className="w-full pl-12 pr-4 py-3.5 min-h-12 rounded-xl bg-black/40 border border-purple-400/20 text-white font-rajdhani focus:outline-none focus:border-purple-400/50 focus:ring-2 focus:ring-purple-400/20 transition-all duration-300"
@@ -267,11 +253,12 @@ export default function ExpenseForm({ onAddExpense, mode, onModeChange }: Expens
         {mode === "advanced" && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="flex items-center gap-2 mb-2 font-orbitron text-[10px] uppercase tracking-wider neon-text-yellow">
+              <label htmlFor={id("time")} className="flex items-center gap-2 mb-2 font-orbitron text-[10px] uppercase tracking-wider neon-text-yellow">
                 <Clock className="w-3 h-3" />
                 Time
               </label>
               <input
+                id={id("time")}
                 type="time"
                 value={time}
                 onChange={(e) => setTime(e.target.value)}
@@ -279,12 +266,14 @@ export default function ExpenseForm({ onAddExpense, mode, onModeChange }: Expens
               />
             </div>
             <div>
-              <label className="flex items-center gap-2 mb-2 font-orbitron text-[10px] uppercase tracking-wider neon-text-yellow">
+              <label htmlFor={id("location")} className="flex items-center gap-2 mb-2 font-orbitron text-[10px] uppercase tracking-wider neon-text-yellow">
                 <MapPin className="w-3 h-3" />
                 Location
               </label>
               <input
+                id={id("location")}
                 type="text"
+                maxLength={80}
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
                 placeholder="e.g., Mall, Office, Home"
@@ -295,16 +284,17 @@ export default function ExpenseForm({ onAddExpense, mode, onModeChange }: Expens
         )}
 
         {/* Category */}
-        <div>
-          <label className="flex items-center gap-2 mb-2 font-orbitron text-[10px] uppercase tracking-wider neon-text-pink">
+        <fieldset>
+          <legend className="flex items-center gap-2 mb-2 font-orbitron text-[10px] uppercase tracking-wider neon-text-pink">
             <span className="w-1 h-1 rounded-full bg-pink-400"></span>
-            Category <span className="text-pink-400">*</span>
-          </label>
+            Category <span className="text-pink-400" aria-hidden="true">*</span>
+          </legend>
           <div className="grid grid-cols-3 xs:grid-cols-4 sm:grid-cols-5 md:grid-cols-7 gap-2 sm:gap-3">
-            {categories.map((cat) => (
+            {CATEGORIES.map((cat) => (
               <button
                 key={cat.name}
                 type="button"
+                aria-pressed={category === cat.name}
                 onClick={() => {
                   setCategory(cat.name)
                   setSubCategory("")
@@ -318,28 +308,29 @@ export default function ExpenseForm({ onAddExpense, mode, onModeChange }: Expens
                   }
                 `}
               >
-                <span className={`text-lg transition-transform duration-300 ${category === cat.name ? 'scale-110' : 'group-hover:scale-110'}`}>
+                <span aria-hidden="true" className={`text-lg transition-transform duration-300 ${category === cat.name ? 'scale-110' : 'group-hover:scale-110'}`}>
                   {cat.icon}
                 </span>
                 <span className="truncate w-full text-center">{cat.name}</span>
               </button>
             ))}
           </div>
-        </div>
+        </fieldset>
 
         {/* Sub-category (Advanced Only) */}
         {mode === "advanced" && currentCategory && (
-          <div>
-            <label className="flex items-center gap-2 mb-2 font-orbitron text-[10px] uppercase tracking-wider text-cyan-100/60">
+          <fieldset>
+            <legend className="flex items-center gap-2 mb-2 font-orbitron text-[10px] uppercase tracking-wider text-cyan-100/60">
               <ChevronDown className="w-3 h-3" />
               Sub-category
-            </label>
+            </legend>
             <div className="flex flex-wrap gap-2">
               {currentCategory.subCategories.map((sub) => (
                 <button
                   key={sub}
                   type="button"
-                  onClick={() => setSubCategory(sub)}
+                  aria-pressed={subCategory === sub}
+                  onClick={() => setSubCategory(subCategory === sub ? "" : sub)}
                   className={`
                     px-3 py-1.5 rounded-lg font-rajdhani text-xs
                     transition-all duration-300 cursor-pointer
@@ -353,17 +344,22 @@ export default function ExpenseForm({ onAddExpense, mode, onModeChange }: Expens
                 </button>
               ))}
             </div>
-          </div>
+          </fieldset>
         )}
 
         {/* Description */}
         <div>
-          <label className="flex items-center gap-2 mb-2 font-orbitron text-[10px] uppercase tracking-wider neon-text-cyan">
+          <label htmlFor={id("description")} className="flex items-center gap-2 mb-2 font-orbitron text-[10px] uppercase tracking-wider neon-text-cyan">
             <span className="w-1 h-1 rounded-full bg-cyan-400"></span>
-            Description <span className="text-pink-400">*</span>
+            Description <span className="text-pink-400" aria-hidden="true">*</span>
           </label>
           <input
+            id={id("description")}
             type="text"
+            required
+            aria-required="true"
+            aria-invalid={error && !description.trim() ? true : undefined}
+            maxLength={120}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="e.g., Lunch at restaurant"
@@ -374,48 +370,51 @@ export default function ExpenseForm({ onAddExpense, mode, onModeChange }: Expens
         {/* ============================================
             ADVANCED FIELDS (Only in Advanced Mode)
             ============================================ */}
-        
+
         {mode === "advanced" && (
           <>
             {/* Payment Method */}
-            <div>
-              <label className="flex items-center gap-2 mb-2 font-orbitron text-[10px] uppercase tracking-wider neon-text-yellow">
+            <fieldset>
+              <legend className="flex items-center gap-2 mb-2 font-orbitron text-[10px] uppercase tracking-wider neon-text-yellow">
                 <CreditCard className="w-3 h-3" />
                 Payment Method
-              </label>
+              </legend>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                {paymentMethods.map((method) => {
-                  const Icon = method.icon
+                {PAYMENT_METHODS.map((method) => {
+                  const Icon = PAYMENT_ICONS[method]
                   return (
                     <button
-                      key={method.name}
+                      key={method}
                       type="button"
-                      onClick={() => setPaymentMethod(method.name)}
+                      aria-pressed={paymentMethod === method}
+                      onClick={() => setPaymentMethod(method)}
                       className={`
                         p-2.5 rounded-xl font-rajdhani font-medium text-xs
                         transition-all duration-300 flex items-center justify-center gap-2 cursor-pointer
-                        ${paymentMethod === method.name
+                        ${paymentMethod === method
                           ? 'bg-yellow-400/15 border border-yellow-400/50 neon-text-yellow'
                           : 'bg-black/20 border border-cyan-400/10 text-cyan-100/70 hover:border-yellow-400/30'
                         }
                       `}
                     >
                       <Icon className="w-4 h-4" />
-                      <span>{method.name}</span>
+                      <span>{method}</span>
                     </button>
                   )
                 })}
               </div>
-            </div>
+            </fieldset>
 
             {/* Tags */}
             <div>
-              <label className="flex items-center gap-2 mb-2 font-orbitron text-[10px] uppercase tracking-wider neon-text-purple">
+              <label htmlFor={id("tags")} className="flex items-center gap-2 mb-2 font-orbitron text-[10px] uppercase tracking-wider neon-text-purple">
                 <Tag className="w-3 h-3" />
                 Tags (comma separated)
               </label>
               <input
+                id={id("tags")}
                 type="text"
+                maxLength={120}
                 value={tags}
                 onChange={(e) => setTags(e.target.value)}
                 placeholder="e.g., work, lunch, team"
@@ -423,28 +422,35 @@ export default function ExpenseForm({ onAddExpense, mode, onModeChange }: Expens
               />
             </div>
 
-            {/* Split With */}
+            {/* Shared With */}
             <div>
-              <label className="flex items-center gap-2 mb-2 font-orbitron text-[10px] uppercase tracking-wider neon-text-pink">
+              <label htmlFor={id("split")} className="flex items-center gap-2 mb-2 font-orbitron text-[10px] uppercase tracking-wider neon-text-pink">
                 <Users className="w-3 h-3" />
-                Split With (comma separated)
+                Shared with (comma separated)
               </label>
               <input
+                id={id("split")}
                 type="text"
+                maxLength={120}
                 value={splitWith}
                 onChange={(e) => setSplitWith(e.target.value)}
                 placeholder="e.g., John, Sarah, Mike"
                 className="w-full px-4 py-3 rounded-xl bg-black/40 border border-pink-400/20 text-white font-rajdhani placeholder:text-cyan-100/30 focus:outline-none focus:border-pink-400/50 transition-all duration-300"
               />
+              <p className="mt-1 text-[10px] font-rajdhani text-cyan-100/40">
+                A note of who shared this expense. Amounts are not divided automatically.
+              </p>
             </div>
 
             {/* Notes */}
             <div>
-              <label className="flex items-center gap-2 mb-2 font-orbitron text-[10px] uppercase tracking-wider neon-text-cyan">
+              <label htmlFor={id("notes")} className="flex items-center gap-2 mb-2 font-orbitron text-[10px] uppercase tracking-wider neon-text-cyan">
                 <FileText className="w-3 h-3" />
                 Additional Notes
               </label>
               <textarea
+                id={id("notes")}
+                maxLength={500}
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="Add any extra details..."
@@ -465,7 +471,7 @@ export default function ExpenseForm({ onAddExpense, mode, onModeChange }: Expens
                       Recurring Expense
                     </p>
                     <p className="font-rajdhani text-[10px] text-cyan-100/50">
-                      Automatically track repeated payments
+                      Mark this as a repeating payment (label only, it is not added again automatically)
                     </p>
                   </div>
                 </div>
@@ -475,17 +481,19 @@ export default function ExpenseForm({ onAddExpense, mode, onModeChange }: Expens
                     checked={isRecurring}
                     onChange={(e) => setIsRecurring(e.target.checked)}
                     className="sr-only peer"
+                    aria-label="Recurring expense"
                   />
-                  <div className="w-11 h-6 bg-black/60 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-cyan-400 after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-yellow-400/30 peer-checked:after:bg-yellow-400"></div>
+                  <div className="w-11 h-6 bg-black/60 rounded-full peer peer-focus-visible:ring-2 peer-focus-visible:ring-yellow-400/60 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-cyan-400 after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-yellow-400/30 peer-checked:after:bg-yellow-400"></div>
                 </label>
               </div>
 
               {isRecurring && (
-                <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-yellow-400/10">
-                  {recurringOptions.map((option) => (
+                <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-yellow-400/10" role="group" aria-label="Recurring frequency">
+                  {RECURRING_OPTIONS.map((option) => (
                     <button
                       key={option.value}
                       type="button"
+                      aria-pressed={recurringFrequency === option.value}
                       onClick={() => setRecurringFrequency(option.value)}
                       className={`
                         px-3 py-1.5 rounded-lg font-rajdhani text-xs
@@ -508,22 +516,10 @@ export default function ExpenseForm({ onAddExpense, mode, onModeChange }: Expens
         {/* Submit Button */}
         <button
           type="submit"
-          disabled={isSubmitting}
-          className={`w-full py-4 min-h-[52px] rounded-xl font-orbitron text-sm tracking-wider flex items-center justify-center gap-2 bg-linear-to-r from-cyan-500/20 to-pink-500/20 border border-cyan-400/40 hover:border-cyan-400/70 hover:shadow-lg hover:shadow-cyan-400/20 text-cyan-100 hover:text-white transition-all duration-300 group cursor-pointer active:scale-[0.98] ${
-            isSubmitting ? 'opacity-50 cursor-not-allowed' : ''
-          }`}
+          className="w-full py-4 min-h-13 rounded-xl font-orbitron text-sm tracking-wider flex items-center justify-center gap-2 bg-linear-to-r from-cyan-500/20 to-pink-500/20 border border-cyan-400/40 hover:border-cyan-400/70 hover:shadow-lg hover:shadow-cyan-400/20 text-cyan-100 hover:text-white transition-all duration-300 group cursor-pointer active:scale-[0.98]"
         >
-          {isSubmitting ? (
-            <>
-              <div className="w-4 h-4 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
-              ADDING...
-            </>
-          ) : (
-            <>
-              <Plus className="w-4 h-4 group-hover:rotate-90 transition-transform duration-300" />
-              ADD EXPENSE
-            </>
-          )}
+          <Plus className="w-4 h-4 group-hover:rotate-90 transition-transform duration-300" />
+          ADD EXPENSE
         </button>
 
         {/* Mode hint */}

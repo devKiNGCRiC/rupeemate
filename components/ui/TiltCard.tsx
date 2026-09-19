@@ -25,7 +25,7 @@ export function TiltCard({
 }: TiltCardProps) {
   const cardRef = useRef<HTMLDivElement | null>(null)
   const glareRef = useRef<HTMLDivElement | null>(null)
-  const frame = useRef<number>()
+  const frame = useRef<number | undefined>(undefined)
 
   useEffect(() => {
     return () => {

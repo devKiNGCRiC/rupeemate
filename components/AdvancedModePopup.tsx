@@ -30,6 +30,16 @@ export default function AdvancedModePopup({ isOpen, onClose, onTryAdvanced }: Ad
     return undefined
   }, [isOpen])
 
+  // Close with Escape
+  useEffect(() => {
+    if (!isOpen) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose()
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [isOpen, onClose])
+
   if (!isOpen) return null
 
   const benefits = [
@@ -60,11 +70,17 @@ export default function AdvancedModePopup({ isOpen, onClose, onTryAdvanced }: Ad
   }
 
   return (
-    <div className={`fixed inset-0 z-100 flex items-center justify-center p-4 transition-all duration-300 ${isAnimating ? 'opacity-100' : 'opacity-0'}`}>
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="advanced-popup-title"
+      className={`fixed inset-0 z-100 flex items-center justify-center p-4 transition-all duration-300 ${isAnimating ? 'opacity-100' : 'opacity-0'}`}
+    >
       {/* Backdrop */}
       <div 
         className="absolute inset-0 bg-black/80 backdrop-blur-sm"
         onClick={onClose}
+        aria-hidden="true"
       />
 
       {/* Modal */}
@@ -76,7 +92,9 @@ export default function AdvancedModePopup({ isOpen, onClose, onTryAdvanced }: Ad
 
           {/* Close button */}
           <button
+            type="button"
             onClick={onClose}
+            aria-label="Close"
             className="absolute top-4 right-4 p-2 rounded-xl bg-black/40 border border-cyan-400/20 hover:border-cyan-400/40 transition-colors z-10 cursor-pointer"
           >
             <X className="w-4 h-4 text-cyan-100/60" />
@@ -89,7 +107,7 @@ export default function AdvancedModePopup({ isOpen, onClose, onTryAdvanced }: Ad
               <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-linear-to-br from-cyan-400/20 to-pink-400/20 border border-cyan-400/30 mb-4">
                 <Sparkles className="w-8 h-8 neon-text-cyan" />
               </div>
-              <h2 className="text-2xl md:text-3xl font-bungee holographic mb-2">
+              <h2 id="advanced-popup-title" className="text-2xl md:text-3xl font-bungee holographic mb-2">
                 UNLOCK MORE
               </h2>
               <p className="font-rajdhani text-cyan-100/70 text-sm md:text-base">
@@ -127,6 +145,7 @@ export default function AdvancedModePopup({ isOpen, onClose, onTryAdvanced }: Ad
             {/* Actions */}
             <div className="flex flex-col sm:flex-row gap-3">
               <button
+                type="button"
                 onClick={onTryAdvanced}
                 className="flex-1 py-3.5 px-6 rounded-xl font-orbitron text-sm tracking-wider flex items-center justify-center gap-2 bg-linear-to-r from-cyan-500/20 to-pink-500/20 border border-cyan-400/40 hover:border-cyan-400/70 text-cyan-100 hover:text-white transition-all duration-300 group cursor-pointer"
               >
@@ -135,6 +154,7 @@ export default function AdvancedModePopup({ isOpen, onClose, onTryAdvanced }: Ad
                 <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
               </button>
               <button
+                type="button"
                 onClick={onClose}
                 className="flex-1 py-3.5 px-6 rounded-xl font-orbitron text-sm tracking-wider bg-black/40 border border-cyan-400/20 hover:border-cyan-400/40 text-cyan-100/60 hover:text-cyan-100 transition-all duration-300 cursor-pointer"
               >

@@ -1,5 +1,10 @@
 @import "tailwindcss";
 
+/* Extra-small breakpoint used by the xs: variants (Tailwind has no default xs) */
+@theme {
+  --breakpoint-xs: 30rem;
+}
+
 /* ============================================
    🎮 SYNTHWAVE CYBERPUNK THEME SYSTEM
    ============================================
@@ -872,4 +877,24 @@ select {
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
   border-radius: 8px;
+}
+
+/* ============================================
+   ♿ REDUCED MOTION
+   Respect the operating-system setting: turn off decorative animation and
+   transitions (aurora, scanlines, floating, glitch, page fades).
+   ============================================ */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

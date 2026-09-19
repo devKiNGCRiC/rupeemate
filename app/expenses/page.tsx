@@ -1,43 +1,43 @@
 /**
  * ⚡ CYBERPUNK EXPENSE TRACKER PAGE
- * 
- * URL: http://localhost:3000/expenses
- * 
+ *
+ * URL: /expenses
+ *
  * FEATURES:
  * - Basic/Advanced form modes
  * - Welcome popup for advanced mode promotion
- * - Expense list with detailed info
+ * - Expense list with search, filters and sorting
+ * - Data saved in this browser (see AppDataProvider) and CSV export
  */
 
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import ExpenseForm, { ExpenseData } from "@/components/ExpenseForm"
+import ExpenseForm from "@/components/ExpenseForm"
 import AdvancedModePopup from "@/components/AdvancedModePopup"
 import Toast, { ToastType } from "@/components/Toast"
 import Breadcrumb from "@/components/Breadcrumb"
-import { 
+import { useAppData } from "@/components/AppDataProvider"
+import { downloadTextFile } from "@/lib/download"
+import {
+  CATEGORIES,
+  PAYMENT_METHODS,
+  categoryMeta,
+  expensesToCsv,
+  formatDisplayDate,
+  formatINR,
+  matchesDateFilter,
+  sumAmounts,
+  toDateKey,
+  type DateFilter,
+  type ExpenseData,
+} from "@/lib/expenses"
+import {
   Trash2, Calendar, TrendingUp, Zap, MapPin, Tag, CreditCard, Users, Repeat,
-  Search, X, SlidersHorizontal, ArrowUpDown
+  Search, X, SlidersHorizontal, ArrowUpDown, Download, HardDrive
 } from "lucide-react"
 
-interface Expense {
-  id: string
-  amount: number
-  category: string
-  subCategory?: string
-  date: string
-  time?: string
-  description: string
-  paymentMethod?: string
-  tags?: string[]
-  notes?: string
-  isRecurring?: boolean
-  recurringFrequency?: string
-  location?: string
-  splitWith?: string[]
-  receiptUrl?: string
-}
+type SortBy = "date-desc" | "date-asc" | "amount-desc" | "amount-asc"
 
 interface ToastState {
   show: boolean
@@ -45,28 +45,43 @@ interface ToastState {
   type: ToastType
 }
 
+const POPUP_KEY = "rupeemate_seen_advanced_popup"
+
+const DATE_CHIPS: { value: DateFilter; label: string }[] = [
+  { value: "all", label: "All Time" },
+  { value: "today", label: "Today" },
+  { value: "week", label: "Last 7 Days" },
+  { value: "month", label: "Last 30 Days" },
+]
+
 export default function ExpensesPage() {
-  const [expenses, setExpenses] = useState<Expense[]>([])
+  const { ready, expenses, addExpense, deleteExpense } = useAppData()
   const [formMode, setFormMode] = useState<"basic" | "advanced">("basic")
   const [showPopup, setShowPopup] = useState(false)
   const [toast, setToast] = useState<ToastState>({ show: false, message: "", type: "success" })
-  
+
   // Search & Filter States
   const [searchQuery, setSearchQuery] = useState("")
   const [showFilters, setShowFilters] = useState(false)
   const [selectedCategories, setSelectedCategories] = useState<string[]>([])
   const [selectedPaymentMethods, setSelectedPaymentMethods] = useState<string[]>([])
-  const [dateFilter, setDateFilter] = useState<"all" | "today" | "week" | "month" | "custom">("all")
+  const [dateFilter, setDateFilter] = useState<DateFilter>("all")
   const [customDateRange, setCustomDateRange] = useState({ start: "", end: "" })
-  const [sortBy, setSortBy] = useState<"date-desc" | "date-asc" | "amount-desc" | "amount-asc">("date-desc")
+  const [sortBy, setSortBy] = useState<SortBy>("date-desc")
 
   const showToast = (message: string, type: ToastType) => {
     setToast({ show: true, message, type })
   }
 
-  // Check if user has seen the popup before
+  // Check if user has seen the popup before (storage can be blocked, so guard it)
   useEffect(() => {
-    const hasSeenPopup = localStorage.getItem("rupeemate_seen_advanced_popup")
+    let hasSeenPopup = false
+    try {
+      hasSeenPopup = !!localStorage.getItem(POPUP_KEY)
+    } catch {
+      // storage unavailable: skip the popup rather than nagging on every visit
+      hasSeenPopup = true
+    }
     if (!hasSeenPopup) {
       // Show popup after a short delay for better UX
       const timer = setTimeout(() => {
@@ -78,7 +93,11 @@ export default function ExpensesPage() {
 
   const handleClosePopup = () => {
     setShowPopup(false)
-    localStorage.setItem("rupeemate_seen_advanced_popup", "true")
+    try {
+      localStorage.setItem(POPUP_KEY, "true")
+    } catch {
+      // ignore: the popup simply shows again next visit
+    }
   }
 
   const handleTryAdvanced = () => {
@@ -86,21 +105,17 @@ export default function ExpensesPage() {
     handleClosePopup()
   }
 
-  const handleModeChange = (mode: "basic" | "advanced") => {
-    setFormMode(mode)
-  }
-
   const handleAddExpense = (newExpense: ExpenseData) => {
-    const expense: Expense = {
-      ...newExpense,
-      id: `exp_${Date.now()}`,
+    const saved = addExpense(newExpense)
+    if (saved) {
+      showToast("✨ Expense added successfully!", "success")
+    } else {
+      showToast("Added, but your browser blocked saving. It will be lost when you close this tab.", "error")
     }
-    setExpenses([expense, ...expenses])
-    showToast("✨ Expense added successfully!", "success")
   }
 
   const handleDeleteExpense = (id: string) => {
-    setExpenses(expenses.filter((exp) => exp.id !== id))
+    deleteExpense(id)
     showToast("🗑️ Expense deleted", "info")
   }
 
@@ -128,35 +143,21 @@ export default function ExpensesPage() {
 
     // Payment method filter
     if (selectedPaymentMethods.length > 0) {
-      filtered = filtered.filter(exp => 
+      filtered = filtered.filter(exp =>
         exp.paymentMethod && selectedPaymentMethods.includes(exp.paymentMethod)
       )
     }
 
-    // Date filter
-    const now = new Date()
-    if (dateFilter === "today") {
-      const today = now.toISOString().split('T')[0]
-      filtered = filtered.filter(exp => exp.date === today)
-    } else if (dateFilter === "week") {
-      const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
-      filtered = filtered.filter(exp => new Date(exp.date) >= weekAgo)
-    } else if (dateFilter === "month") {
-      const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
-      filtered = filtered.filter(exp => new Date(exp.date) >= monthAgo)
-    } else if (dateFilter === "custom" && customDateRange.start && customDateRange.end) {
-      filtered = filtered.filter(exp => 
-        exp.date >= customDateRange.start && exp.date <= customDateRange.end
-      )
-    }
+    // Date filter (local calendar dates, see lib/expenses.ts)
+    filtered = filtered.filter(exp => matchesDateFilter(exp, dateFilter, customDateRange))
 
-    // Sorting
+    // Sorting (dates are YYYY-MM-DD, so string comparison is chronological)
     filtered.sort((a, b) => {
       switch (sortBy) {
         case "date-desc":
-          return new Date(b.date).getTime() - new Date(a.date).getTime()
+          return `${b.date}${b.time ?? ""}`.localeCompare(`${a.date}${a.time ?? ""}`)
         case "date-asc":
-          return new Date(a.date).getTime() - new Date(b.date).getTime()
+          return `${a.date}${a.time ?? ""}`.localeCompare(`${b.date}${b.time ?? ""}`)
         case "amount-desc":
           return b.amount - a.amount
         case "amount-asc":
@@ -169,7 +170,7 @@ export default function ExpensesPage() {
     return filtered
   }, [expenses, searchQuery, selectedCategories, selectedPaymentMethods, dateFilter, customDateRange, sortBy])
 
-  const totalAmount = filteredAndSortedExpenses.reduce((sum, exp) => sum + exp.amount, 0)
+  const totalAmount = sumAmounts(filteredAndSortedExpenses)
 
   // Clear all filters
   const clearAllFilters = () => {
@@ -181,25 +182,41 @@ export default function ExpensesPage() {
     setSortBy("date-desc")
   }
 
-  const hasActiveFilters = searchQuery || selectedCategories.length > 0 || 
+  const hasActiveFilters = !!searchQuery || selectedCategories.length > 0 ||
     selectedPaymentMethods.length > 0 || dateFilter !== "all"
 
-  // Category emoji mapping
-  const categoryEmojis: { [key: string]: string } = {
-    Food: "🍔",
-    Transport: "🚗",
-    Entertainment: "🎮",
-    Shopping: "🛍️",
-    Bills: "💡",
-    Health: "⚕️",
-    Other: "📦",
+  const handleExport = () => {
+    if (filteredAndSortedExpenses.length === 0) return
+    // BOM so Excel opens the file as UTF-8
+    downloadTextFile(
+      `rupeemate-expenses-${toDateKey(new Date())}.csv`,
+      `﻿${expensesToCsv(filteredAndSortedExpenses)}`,
+      "text/csv",
+    )
+    showToast(`Exported ${filteredAndSortedExpenses.length} expense${filteredAndSortedExpenses.length === 1 ? "" : "s"}`, "success")
   }
+
+  const chipClass = (active: boolean) => `
+    px-3 py-1.5 rounded-lg font-rajdhani text-xs font-medium transition-all duration-300 cursor-pointer
+    ${active
+      ? 'bg-cyan-400/20 border border-cyan-400/50 neon-text-cyan'
+      : 'bg-black/30 border border-cyan-400/10 text-cyan-100/60 hover:border-cyan-400/30'
+    }
+  `
+
+  const filterChipClass = (active: boolean) => `
+    px-3 py-1.5 rounded-lg font-rajdhani text-xs font-medium transition-all duration-300 cursor-pointer
+    ${active
+      ? 'bg-pink-400/20 border border-pink-400/50 neon-text-pink'
+      : 'bg-black/30 border border-cyan-400/10 text-cyan-100/60 hover:border-cyan-400/30'
+    }
+  `
 
   return (
     <div className="relative overflow-hidden min-h-full">
       {/* Advanced Mode Popup */}
-      <AdvancedModePopup 
-        isOpen={showPopup} 
+      <AdvancedModePopup
+        isOpen={showPopup}
         onClose={handleClosePopup}
         onTryAdvanced={handleTryAdvanced}
       />
@@ -207,7 +224,7 @@ export default function ExpensesPage() {
       {/* ========================================
           🎮 SIMPLIFIED BACKGROUND (Performance Optimized)
           ======================================== */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+      <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
         <div className="absolute inset-0 cyber-grid opacity-30"></div>
         <div className="aurora-layer"></div>
       </div>
@@ -215,11 +232,11 @@ export default function ExpensesPage() {
       {/* ========================================
           🌟 MAIN CONTENT
           ======================================== */}
-      <main className="container mx-auto px-4 sm:px-6 py-6 sm:py-8 md:py-12 relative z-10">
-        
+      <div className="container mx-auto px-4 sm:px-6 py-6 sm:py-8 md:py-12 relative z-10">
+
         {/* Breadcrumb Navigation */}
         <Breadcrumb />
-        
+
         {/* Page Header */}
         <div className="mb-8 sm:mb-10 md:mb-14">
           <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-3 sm:gap-4 mb-4 sm:mb-6">
@@ -239,8 +256,8 @@ export default function ExpensesPage() {
             </div>
             <div className="flex items-center gap-3">
               <div className="hidden md:flex items-center gap-2 px-4 py-2 rounded-xl bg-black/40 border border-cyan-400/20">
-                <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
-                <span className="text-xs font-rajdhani text-cyan-100/60">Auto-sync enabled</span>
+                <HardDrive className="w-3.5 h-3.5 neon-text-cyan" />
+                <span className="text-xs font-rajdhani text-cyan-100/60">Saved in this browser</span>
               </div>
             </div>
           </div>
@@ -251,17 +268,17 @@ export default function ExpensesPage() {
             📝 EXPENSE FORM
             ======================================== */}
         <div className="max-w-2xl mx-auto mb-12 md:mb-16">
-          <ExpenseForm 
-            onAddExpense={handleAddExpense} 
+          <ExpenseForm
+            onAddExpense={handleAddExpense}
             mode={formMode}
-            onModeChange={handleModeChange}
+            onModeChange={setFormMode}
           />
         </div>
 
         {/* ========================================
-            💰 TOTAL AMOUNT CARD
+            💰 SEARCH, FILTERS & TOTAL
             ======================================== */}
-        {expenses.length > 0 && (
+        {ready && expenses.length > 0 && (
           <>
             {/* Search Bar & Filters */}
             <div className="max-w-4xl mx-auto mb-6 space-y-4">
@@ -273,14 +290,17 @@ export default function ExpensesPage() {
                     <Search className="w-4 h-4 neon-text-cyan" />
                   </div>
                   <input
-                    type="text"
+                    type="search"
+                    aria-label="Search expenses"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Search expenses..."
-                    className="w-full pl-12 pr-4 py-3.5 min-h-12 rounded-xl bg-black/40 border border-cyan-400/20 text-white font-rajdhani placeholder:text-cyan-100/30 focus:outline-none focus:border-cyan-400/50 focus:ring-2 focus:ring-cyan-400/20 transition-all duration-300"
+                    className="w-full pl-12 pr-12 py-3.5 min-h-12 rounded-xl bg-black/40 border border-cyan-400/20 text-white font-rajdhani placeholder:text-cyan-100/30 focus:outline-none focus:border-cyan-400/50 focus:ring-2 focus:ring-cyan-400/20 transition-all duration-300 [&::-webkit-search-cancel-button]:appearance-none"
                   />
                   {searchQuery && (
                     <button
+                      type="button"
+                      aria-label="Clear search"
                       onClick={() => setSearchQuery("")}
                       className="absolute right-4 top-1/2 -translate-y-1/2 p-1 rounded-lg hover:bg-pink-400/10 transition-colors cursor-pointer"
                     >
@@ -291,12 +311,14 @@ export default function ExpensesPage() {
 
                 {/* Filter Toggle Button */}
                 <button
+                  type="button"
+                  aria-expanded={showFilters}
                   onClick={() => setShowFilters(!showFilters)}
                   className={`
                     flex items-center gap-2 px-5 py-3.5 min-h-12 rounded-xl font-rajdhani font-semibold
                     transition-all duration-300 cursor-pointer whitespace-nowrap
-                    ${showFilters 
-                      ? 'bg-purple-400/20 border-2 border-purple-400/50 neon-text-purple' 
+                    ${showFilters
+                      ? 'bg-purple-400/20 border-2 border-purple-400/50 neon-text-purple'
                       : 'bg-black/40 border border-purple-400/20 text-purple-200 hover:border-purple-400/40'
                     }
                   `}
@@ -305,7 +327,7 @@ export default function ExpensesPage() {
                   Filters
                   {hasActiveFilters && (
                     <span className="px-1.5 py-0.5 rounded-full bg-pink-400/80 text-[10px] font-bold text-black">
-                      {[selectedCategories.length, selectedPaymentMethods.length, dateFilter !== "all" ? 1 : 0, searchQuery ? 1 : 0].filter(Boolean).reduce((a, b) => a + b, 0)}
+                      {selectedCategories.length + selectedPaymentMethods.length + (dateFilter !== "all" ? 1 : 0) + (searchQuery ? 1 : 0)}
                     </span>
                   )}
                 </button>
@@ -313,8 +335,9 @@ export default function ExpensesPage() {
                 {/* Sort Dropdown */}
                 <div className="relative">
                   <select
+                    aria-label="Sort expenses"
                     value={sortBy}
-                    onChange={(e) => setSortBy(e.target.value as "date-desc" | "date-asc" | "amount-desc" | "amount-asc")}
+                    onChange={(e) => setSortBy(e.target.value as SortBy)}
                     className="appearance-none w-full sm:w-auto pl-4 pr-10 py-3.5 min-h-12 rounded-xl bg-black/40 border border-cyan-400/20 text-white font-rajdhani cursor-pointer focus:outline-none focus:border-cyan-400/50 focus:ring-2 focus:ring-cyan-400/20 transition-all duration-300"
                   >
                     <option value="date-desc">Newest First</option>
@@ -328,56 +351,20 @@ export default function ExpensesPage() {
 
               {/* Quick Filter Chips */}
               <div className="flex flex-wrap gap-2">
-                <button
-                  onClick={() => setDateFilter("all")}
-                  className={`
-                    px-3 py-1.5 rounded-lg font-rajdhani text-xs font-medium transition-all duration-300 cursor-pointer
-                    ${dateFilter === "all" 
-                      ? 'bg-cyan-400/20 border border-cyan-400/50 neon-text-cyan' 
-                      : 'bg-black/30 border border-cyan-400/10 text-cyan-100/60 hover:border-cyan-400/30'
-                    }
-                  `}
-                >
-                  All Time
-                </button>
-                <button
-                  onClick={() => setDateFilter("today")}
-                  className={`
-                    px-3 py-1.5 rounded-lg font-rajdhani text-xs font-medium transition-all duration-300 cursor-pointer
-                    ${dateFilter === "today" 
-                      ? 'bg-cyan-400/20 border border-cyan-400/50 neon-text-cyan' 
-                      : 'bg-black/30 border border-cyan-400/10 text-cyan-100/60 hover:border-cyan-400/30'
-                    }
-                  `}
-                >
-                  Today
-                </button>
-                <button
-                  onClick={() => setDateFilter("week")}
-                  className={`
-                    px-3 py-1.5 rounded-lg font-rajdhani text-xs font-medium transition-all duration-300 cursor-pointer
-                    ${dateFilter === "week" 
-                      ? 'bg-cyan-400/20 border border-cyan-400/50 neon-text-cyan' 
-                      : 'bg-black/30 border border-cyan-400/10 text-cyan-100/60 hover:border-cyan-400/30'
-                    }
-                  `}
-                >
-                  This Week
-                </button>
-                <button
-                  onClick={() => setDateFilter("month")}
-                  className={`
-                    px-3 py-1.5 rounded-lg font-rajdhani text-xs font-medium transition-all duration-300 cursor-pointer
-                    ${dateFilter === "month" 
-                      ? 'bg-cyan-400/20 border border-cyan-400/50 neon-text-cyan' 
-                      : 'bg-black/30 border border-cyan-400/10 text-cyan-100/60 hover:border-cyan-400/30'
-                    }
-                  `}
-                >
-                  This Month
-                </button>
+                {DATE_CHIPS.map((chip) => (
+                  <button
+                    type="button"
+                    key={chip.value}
+                    aria-pressed={dateFilter === chip.value}
+                    onClick={() => setDateFilter(chip.value)}
+                    className={chipClass(dateFilter === chip.value)}
+                  >
+                    {chip.label}
+                  </button>
+                ))}
                 {hasActiveFilters && (
                   <button
+                    type="button"
                     onClick={clearAllFilters}
                     className="px-3 py-1.5 rounded-lg font-rajdhani text-xs font-medium bg-pink-400/10 border border-pink-400/30 neon-text-pink hover:bg-pink-400/20 transition-all duration-300 cursor-pointer flex items-center gap-1"
                   >
@@ -398,25 +385,21 @@ export default function ExpensesPage() {
                         CATEGORIES
                       </h4>
                       <div className="flex flex-wrap gap-2">
-                        {["Food", "Transport", "Entertainment", "Shopping", "Bills", "Health", "Other"].map((cat) => (
+                        {CATEGORIES.map((cat) => (
                           <button
-                            key={cat}
+                            type="button"
+                            key={cat.name}
+                            aria-pressed={selectedCategories.includes(cat.name)}
                             onClick={() => {
                               setSelectedCategories(prev =>
-                                prev.includes(cat)
-                                  ? prev.filter(c => c !== cat)
-                                  : [...prev, cat]
+                                prev.includes(cat.name)
+                                  ? prev.filter(c => c !== cat.name)
+                                  : [...prev, cat.name]
                               )
                             }}
-                            className={`
-                              px-3 py-1.5 rounded-lg font-rajdhani text-xs font-medium transition-all duration-300 cursor-pointer
-                              ${selectedCategories.includes(cat)
-                                ? 'bg-pink-400/20 border border-pink-400/50 neon-text-pink'
-                                : 'bg-black/30 border border-cyan-400/10 text-cyan-100/60 hover:border-cyan-400/30'
-                              }
-                            `}
+                            className={filterChipClass(selectedCategories.includes(cat.name))}
                           >
-                            {categoryEmojis[cat]} {cat}
+                            {cat.icon} {cat.name}
                           </button>
                         ))}
                       </div>
@@ -429,9 +412,11 @@ export default function ExpensesPage() {
                         PAYMENT METHODS
                       </h4>
                       <div className="flex flex-wrap gap-2">
-                        {["Cash", "UPI", "Card", "Net Banking"].map((method) => (
+                        {PAYMENT_METHODS.map((method) => (
                           <button
+                            type="button"
                             key={method}
+                            aria-pressed={selectedPaymentMethods.includes(method)}
                             onClick={() => {
                               setSelectedPaymentMethods(prev =>
                                 prev.includes(method)
@@ -439,13 +424,7 @@ export default function ExpensesPage() {
                                   : [...prev, method]
                               )
                             }}
-                            className={`
-                              px-3 py-1.5 rounded-lg font-rajdhani text-xs font-medium transition-all duration-300 cursor-pointer
-                              ${selectedPaymentMethods.includes(method)
-                                ? 'bg-pink-400/20 border border-pink-400/50 neon-text-pink'
-                                : 'bg-black/30 border border-cyan-400/10 text-cyan-100/60 hover:border-cyan-400/30'
-                              }
-                            `}
+                            className={filterChipClass(selectedPaymentMethods.includes(method))}
                           >
                             {method}
                           </button>
@@ -461,8 +440,9 @@ export default function ExpensesPage() {
                       </h4>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
-                          <label className="block text-xs font-rajdhani text-cyan-100/60 mb-1">From</label>
+                          <label htmlFor="filter-from" className="block text-xs font-rajdhani text-cyan-100/60 mb-1">From</label>
                           <input
+                            id="filter-from"
                             type="date"
                             value={customDateRange.start}
                             onChange={(e) => {
@@ -475,8 +455,9 @@ export default function ExpensesPage() {
                           />
                         </div>
                         <div>
-                          <label className="block text-xs font-rajdhani text-cyan-100/60 mb-1">To</label>
+                          <label htmlFor="filter-to" className="block text-xs font-rajdhani text-cyan-100/60 mb-1">To</label>
                           <input
+                            id="filter-to"
                             type="date"
                             value={customDateRange.end}
                             onChange={(e) => {
@@ -508,7 +489,7 @@ export default function ExpensesPage() {
                         {hasActiveFilters ? "FILTERED SPEND" : "TOTAL SPEND"}
                       </p>
                       <p className="text-3xl md:text-4xl font-bungee neon-text-purple">
-                        ₹{totalAmount.toLocaleString("en-IN")}
+                        {formatINR(totalAmount)}
                       </p>
                     </div>
                   </div>
@@ -524,8 +505,14 @@ export default function ExpensesPage() {
                       )}
                     </div>
                     <div className="w-px h-8 bg-cyan-400/20 hidden sm:block"></div>
-                    <button className="hidden sm:flex items-center gap-2 px-4 py-2 rounded-xl bg-pink-400/10 border border-pink-400/20 text-sm font-rajdhani neon-text-pink hover:bg-pink-400/20 transition-colors cursor-pointer">
-                      Export
+                    <button
+                      type="button"
+                      onClick={handleExport}
+                      disabled={filteredAndSortedExpenses.length === 0}
+                      className="flex items-center gap-2 px-4 py-2 rounded-xl bg-pink-400/10 border border-pink-400/20 text-sm font-rajdhani neon-text-pink hover:bg-pink-400/20 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <Download className="w-4 h-4" />
+                      Export CSV
                     </button>
                   </div>
                 </div>
@@ -537,11 +524,13 @@ export default function ExpensesPage() {
         {/* ========================================
             📋 EXPENSE LIST
             ======================================== */}
-        {filteredAndSortedExpenses.length === 0 ? (
+        {!ready ? (
+          <p className="text-center font-rajdhani text-cyan-100/50 py-12" role="status">Loading your expenses…</p>
+        ) : filteredAndSortedExpenses.length === 0 ? (
           <div className="max-w-lg mx-auto text-center py-12 sm:py-16 animate-fade-in-up">
             <div className="holo-card p-8 sm:p-10 rounded-3xl border border-cyan-400/20">
               <div className="w-16 sm:w-20 h-16 sm:h-20 mx-auto mb-6 rounded-2xl bg-linear-to-br from-cyan-400/10 to-pink-400/10 flex items-center justify-center animate-float-slow">
-                <span className="text-3xl sm:text-4xl">
+                <span className="text-3xl sm:text-4xl" aria-hidden="true">
                   {expenses.length === 0 ? "💸" : "🔍"}
                 </span>
               </div>
@@ -549,7 +538,7 @@ export default function ExpensesPage() {
                 {expenses.length === 0 ? "NO EXPENSES YET" : "NO RESULTS FOUND"}
               </h3>
               <p className="font-rajdhani text-cyan-100/70 text-sm sm:text-base mb-6 px-4 leading-relaxed">
-                {expenses.length === 0 
+                {expenses.length === 0
                   ? "Add your first expense above to start tracking where your money goes."
                   : "No expenses match your search or filter criteria. Try adjusting your filters."
                 }
@@ -575,12 +564,13 @@ export default function ExpensesPage() {
                     </div>
                   </div>
                   <div className="flex items-center justify-center gap-2 text-xs font-rajdhani text-cyan-100/50">
-                    <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></span>
-                    Your data stays private and secure
+                    <HardDrive className="w-3 h-3" />
+                    Saved only in this browser. Nothing is uploaded.
                   </div>
                 </>
               ) : (
                 <button
+                  type="button"
                   onClick={clearAllFilters}
                   className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-pink-400/10 border border-pink-400/30 text-sm font-rajdhani font-semibold neon-text-pink hover:bg-pink-400/20 transition-all duration-300 cursor-pointer"
                 >
@@ -591,12 +581,12 @@ export default function ExpensesPage() {
             </div>
           </div>
         ) : (
-          <div className="max-w-4xl mx-auto space-y-4">
+          <ul className="max-w-4xl mx-auto space-y-4" aria-label="Expenses">
             {filteredAndSortedExpenses.map((expense, index) => (
-              <div
+              <li
                 key={expense.id}
                 className="group holo-card p-5 rounded-2xl relative overflow-hidden border border-cyan-400/10 hover:border-cyan-400/30 transition-all duration-300 animate-fade-in-up"
-                style={{ animationDelay: `${index * 0.05}s`, animationFillMode: 'backwards' }}
+                style={{ animationDelay: `${Math.min(index, 12) * 0.05}s`, animationFillMode: 'backwards' }}
               >
                 {/* Gradient accent bar */}
                 <div className="absolute top-0 left-0 w-1 h-full bg-linear-to-b from-cyan-400 via-pink-400 to-purple-400 rounded-l-2xl opacity-60 group-hover:opacity-100 transition-opacity"></div>
@@ -605,7 +595,7 @@ export default function ExpensesPage() {
                   {/* Left: Category Icon & Info */}
                   <div className="flex items-start gap-4 flex-1 min-w-0">
                     <div className="w-12 h-12 rounded-xl bg-cyan-400/10 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform duration-300">
-                      <span className="text-2xl">{categoryEmojis[expense.category] || "📦"}</span>
+                      <span className="text-2xl" aria-hidden="true">{categoryMeta(expense.category).icon}</span>
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2 mb-1">
@@ -630,11 +620,7 @@ export default function ExpensesPage() {
                       <div className="flex flex-wrap items-center gap-3 mt-1">
                         <p className="font-rajdhani text-xs text-cyan-400/60 flex items-center gap-1">
                           <Calendar className="w-3 h-3" />
-                          {new Date(expense.date).toLocaleDateString("en-IN", {
-                            day: "numeric",
-                            month: "short",
-                            year: "numeric",
-                          })}
+                          {formatDisplayDate(expense.date)}
                           {expense.time && ` • ${expense.time}`}
                         </p>
                         {expense.paymentMethod && (
@@ -650,9 +636,9 @@ export default function ExpensesPage() {
                           </p>
                         )}
                       </div>
-                      
-                      {/* Tags & Split With */}
-                      {(expense.tags?.length || expense.splitWith?.length) && (
+
+                      {/* Tags & Shared With */}
+                      {(expense.tags?.length || expense.splitWith?.length) ? (
                         <div className="flex flex-wrap items-center gap-2 mt-2">
                           {expense.tags?.map((tag) => (
                             <span key={tag} className="px-2 py-0.5 rounded-md bg-purple-400/10 text-[10px] font-rajdhani text-purple-300 flex items-center gap-1">
@@ -663,11 +649,11 @@ export default function ExpensesPage() {
                           {expense.splitWith?.length ? (
                             <span className="px-2 py-0.5 rounded-md bg-pink-400/10 text-[10px] font-rajdhani text-pink-300 flex items-center gap-1">
                               <Users className="w-2.5 h-2.5" />
-                              Split with {expense.splitWith.length}
+                              Shared with {expense.splitWith.join(", ")}
                             </span>
                           ) : null}
                         </div>
-                      )}
+                      ) : null}
                     </div>
                   </div>
 
@@ -675,42 +661,32 @@ export default function ExpensesPage() {
                   <div className="flex items-center gap-4 justify-between sm:justify-end w-full sm:w-auto">
                     <div className="text-right">
                       <p className="text-2xl font-bungee neon-text-pink">
-                        ₹{expense.amount.toLocaleString("en-IN")}
+                        {formatINR(expense.amount)}
                       </p>
                     </div>
                     <button
+                      type="button"
                       onClick={() => handleDeleteExpense(expense.id)}
                       className="p-2.5 rounded-xl bg-pink-400/5 border border-pink-400/20 hover:bg-pink-400/20 hover:border-pink-400/40 transition-all duration-300 group/btn cursor-pointer"
                       title="Delete expense"
+                      aria-label={`Delete expense: ${expense.description}`}
                     >
                       <Trash2 className="w-4 h-4 neon-text-pink group-hover/btn:scale-110 transition-transform" />
                     </button>
                   </div>
                 </div>
-              </div>
+              </li>
             ))}
-          </div>
+          </ul>
         )}
-
-        {/* ========================================
-            🎪 BOTTOM STATUS
-            ======================================== */}
-        <div className="mt-16 text-center">
-          <div className="inline-flex items-center gap-3 px-4 py-2 rounded-full bg-cyan-400/5 border border-cyan-400/10">
-            <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
-            <p className="font-rajdhani text-xs text-cyan-100/60">
-              Sync active • Data encrypted
-            </p>
-          </div>
-        </div>
-      </main>
+      </div>
 
       {/* Toast Notifications */}
       {toast.show && (
         <Toast
           message={toast.message}
           type={toast.type}
-          onClose={() => setToast({ ...toast, show: false })}
+          onClose={() => setToast((t) => ({ ...t, show: false }))}
         />
       )}
     </div>

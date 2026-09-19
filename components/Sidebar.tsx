@@ -1,23 +1,27 @@
 /**
  * SIDEBAR COMPONENT
- * Navigation sidebar with menu items
+ * Navigation sidebar with menu items and a live monthly-budget summary
  */
 
 "use client"
 
+import { useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { 
-  LayoutDashboard, 
-  Wallet, 
-  PieChart, 
-  Tag, 
-  Settings, 
+import {
+  LayoutDashboard,
+  Wallet,
+  PieChart,
+  Tag,
+  Settings,
   X,
   TrendingUp,
   Receipt,
-  Home
+  Home,
+  HardDrive,
 } from "lucide-react"
+import { useAppData } from "@/components/AppDataProvider"
+import { budgetUsage, dashboardStats, formatINR } from "@/lib/expenses"
 
 interface SidebarProps {
   isOpen: boolean
@@ -27,16 +31,27 @@ interface SidebarProps {
 export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const pathname = usePathname()
   const isHomePage = pathname === "/"
+  const { ready, expenses, budget } = useAppData()
+
+  // Close the mobile drawer with Escape
+  useEffect(() => {
+    if (!isOpen) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose()
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [isOpen, onClose])
 
   const menuItems = [
-    ...(!isHomePage ? [{ icon: Home, label: "Home", href: "/", color: "cyan" }] : []),
-    { icon: LayoutDashboard, label: "Dashboard", href: "/dashboard", color: "cyan" },
-    { icon: Wallet, label: "Expenses", href: "/expenses", color: "pink" },
-    { icon: PieChart, label: "Analytics", href: "/analytics", color: "purple" },
-    { icon: Tag, label: "Categories", href: "/categories", color: "yellow" },
-    { icon: TrendingUp, label: "Budget", href: "/budget", color: "green" },
-    { icon: Receipt, label: "Receipts", href: "/receipts", color: "cyan" },
-    { icon: Settings, label: "Settings", href: "/settings", color: "purple" },
+    ...(!isHomePage ? [{ icon: Home, label: "Home", href: "/", color: "cyan", soon: false }] : []),
+    { icon: LayoutDashboard, label: "Dashboard", href: "/dashboard", color: "cyan", soon: false },
+    { icon: Wallet, label: "Expenses", href: "/expenses", color: "pink", soon: false },
+    { icon: PieChart, label: "Analytics", href: "/analytics", color: "purple", soon: false },
+    { icon: Tag, label: "Categories", href: "/categories", color: "yellow", soon: false },
+    { icon: TrendingUp, label: "Budget", href: "/budget", color: "green", soon: false },
+    { icon: Receipt, label: "Receipts", href: "/receipts", color: "cyan", soon: true },
+    { icon: Settings, label: "Settings", href: "/settings", color: "purple", soon: false },
   ]
 
   const colorMap: Record<string, { border: string; bg: string; text: string; glow: string }> = {
@@ -47,6 +62,10 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
     green: { border: "border-green-400/60", bg: "bg-green-400/10", text: "text-green-400", glow: "shadow-[0_0_12px_rgba(57,255,20,0.4)]" },
   }
 
+  const spent = ready ? dashboardStats(expenses).thisMonth : 0
+  const usage = budgetUsage(spent, budget.monthly)
+  const percent = usage === null ? 0 : Math.min(100, Math.round(usage * 100))
+
   return (
     <>
       {/* Overlay for mobile */}
@@ -54,11 +73,13 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         <div
           className="fixed inset-0 bg-black/70 backdrop-blur-md z-40 md:hidden"
           onClick={onClose}
+          aria-hidden="true"
         />
       )}
 
       {/* Sidebar */}
       <aside
+        id="app-sidebar"
         className={`
           fixed top-16 left-0 bottom-0 w-64 z-40
           transform transition-transform duration-300 ease-in-out
@@ -70,6 +91,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
       >
         {/* Close button (mobile only) */}
         <button
+          type="button"
           onClick={onClose}
           className="absolute top-4 right-4 p-2 rounded-lg bg-pink-400/10 border border-pink-400/30 hover:bg-pink-400/20 md:hidden transition-colors cursor-pointer"
           aria-label="Close sidebar"
@@ -78,7 +100,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         </button>
 
         {/* Menu Items */}
-        <nav className="p-4 space-y-1 mt-2">
+        <nav className="p-4 space-y-1 mt-2" aria-label="Sidebar">
           {menuItems.map((item) => {
             const Icon = item.icon
             const isActive = pathname === item.href
@@ -89,11 +111,8 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                 key={item.href}
                 href={item.href}
                 prefetch={true}
-                onClick={() => {
-                  onClose()
-                  // Small delay to feel the click before navigation
-                  setTimeout(() => {}, 100)
-                }}
+                onClick={onClose}
+                aria-current={isActive ? "page" : undefined}
                 className={`
                   relative flex items-center gap-3 px-4 py-3 rounded-xl
                   font-rajdhani font-semibold text-base
@@ -109,34 +128,68 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                 )}
                 <Icon className={`w-5 h-5 transition-transform duration-300 ${isActive ? '' : 'group-hover:scale-110'}`} />
                 {item.label}
+                {item.soon && (
+                  <span className="ml-auto px-1.5 py-0.5 rounded-md bg-yellow-400/10 border border-yellow-400/30 text-[9px] font-orbitron uppercase tracking-wider text-yellow-300">
+                    Soon
+                  </span>
+                )}
               </Link>
             )
           })}
         </nav>
 
-        {/* Usage Progress */}
+        {/* Monthly budget summary (real data) */}
         <div className="px-4 mt-6">
           <div className="glass-card p-4 rounded-xl border border-cyan-400/20">
             <div className="flex items-center justify-between mb-2">
               <p className="font-orbitron text-xs text-cyan-400 uppercase tracking-wider">Monthly Budget</p>
-              <span className="text-xs font-rajdhani text-pink-400">68%</span>
+              {usage !== null && (
+                <span className={`text-xs font-rajdhani ${usage > 1 ? "text-red-400" : "text-pink-400"}`}>
+                  {Math.round(usage * 100)}%
+                </span>
+              )}
             </div>
-            <div className="h-2 rounded-full bg-black/40 overflow-hidden">
-              <div className="h-full w-[68%] rounded-full bg-linear-to-r from-cyan-400 via-pink-400 to-purple-500" />
-            </div>
-            <p className="mt-2 text-xs font-rajdhani text-cyan-100/70">₹8,160 of ₹12,000 spent</p>
+            {usage !== null ? (
+              <>
+                <div
+                  className="h-2 rounded-full bg-black/40 overflow-hidden"
+                  role="progressbar"
+                  aria-label="Monthly budget used"
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={percent}
+                >
+                  <div
+                    className="h-full rounded-full bg-linear-to-r from-cyan-400 via-pink-400 to-purple-500"
+                    style={{ width: `${percent}%` }}
+                  />
+                </div>
+                <p className="mt-2 text-xs font-rajdhani text-cyan-100/70">
+                  {formatINR(spent)} of {formatINR(budget.monthly)} spent
+                </p>
+              </>
+            ) : (
+              <p className="text-xs font-rajdhani text-cyan-100/70">
+                No budget set yet.{" "}
+                <Link href="/budget" onClick={onClose} className="neon-text-cyan underline underline-offset-2">
+                  Set one
+                </Link>
+              </p>
+            )}
           </div>
         </div>
 
-        {/* Bottom Section */}
-        <div className="absolute bottom-6 left-4 right-4">
+        {/* Storage note */}
+        <div className="px-4 mt-4 pb-6">
           <div className="glass-card p-4 rounded-xl border border-purple-400/30">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-8 h-8 rounded-full bg-linear-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-bungee text-xs">RM</div>
-              <div>
-                <p className="font-orbitron text-xs text-purple-300 uppercase tracking-wider">Cyber Mode</p>
-                <p className="font-rajdhani text-sm text-cyan-100">Level 3 Tracker 🚀</p>
-              </div>
+            <div className="flex items-start gap-3">
+              <HardDrive className="w-4 h-4 neon-text-purple mt-0.5 shrink-0" />
+              <p className="font-rajdhani text-xs text-cyan-100/70 leading-relaxed">
+                Your data is saved only in this browser.{" "}
+                <Link href="/settings" onClick={onClose} className="neon-text-purple underline underline-offset-2">
+                  Back it up
+                </Link>
+              </p>
             </div>
           </div>
         </div>

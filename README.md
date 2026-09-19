@@ -1,125 +1,106 @@
-# 💰 RupeeMate - Your Smart Money Companion
+# 💰 RupeeMate
 
-**Track Expenses • Split Bills • Manage Your Finances**
+**A private, browser-based expense tracker for India.** Log expenses in rupees, set monthly budgets and see where your money goes. No signup, and your data never leaves your browser.
 
-A modern, full-stack web application built to help you manage your finances with ease. Track expenses, split bills with friends, and get smart insights about your spending patterns.
-
----
-
-## 🎯 Project Overview
-
-**RupeeMate** is being built as a learning project by a 1st year MCA student to master full-stack development while creating a practical, real-world application. The goal is to understand modern web technologies from the ground up.
-
-### 🌟 Key Features (Planned)
-
-#### Phase 1: Core Features (Months 1-2)
-- ✅ **Expense Tracking** - Add, view, edit, and delete expenses
-- 📊 **Categories** - Organize expenses by Food, Transport, Shopping, etc.
-- 📅 **Date Filtering** - View expenses by day, week, month
-- 💳 **Payment Methods** - Track cash, UPI, card payments
-- 📈 **Simple Analytics** - Visual charts and spending summaries
-
-#### Phase 2: User Management (Month 3)
-- 🔐 **Authentication** - Secure user signup and login
-- 👤 **Personal Dashboard** - Customized view for each user
-- 💰 **Budget Setting** - Set monthly/category budgets
-- 🔔 **Alerts** - Notifications when approaching budget limits
-
-#### Phase 3: Bill Splitting (Month 4)
-- 👥 **Groups** - Create groups for roommates, trips, friends
-- 🧾 **Shared Expenses** - Add expenses and split equally/unequally
-- 💸 **Settlement** - Track who owes whom
-- ✅ **Settle Up** - Mark debts as paid
-
-#### Phase 4: Advanced Features (Months 5-6)
-- 📸 **Receipt Scanning** - Extract data from receipt photos (OCR)
-- 🤖 **AI Insights** - Smart spending pattern analysis
-- 📱 **SMS Parsing** - Auto-log UPI transactions (India)
-- 🎯 **Savings Goals** - Track progress toward financial goals
-- 🔄 **Recurring Transactions** - Auto-add monthly subscriptions
-- 🌍 **Multi-Currency** - Support for international transactions
+RupeeMate is a learning project by a 1st year MCA student, built to practise full-stack development with a real, usable app.
 
 ---
 
-## 🛠️ Tech Stack
+## ✅ What works today
 
-### Frontend
-- **Framework**: [Next.js 15](https://nextjs.org/) - React framework with App Router
-- **Language**: [TypeScript](https://www.typescriptlang.org/) - Type-safe JavaScript
-- **Styling**: [Tailwind CSS](https://tailwindcss.com/) - Utility-first CSS framework
-- **UI Components**: [Shadcn/ui](https://ui.shadcn.com/) - Beautiful, accessible components
+| Area | What you can do |
+| --- | --- |
+| **Expenses** | Add expenses in Basic or Advanced mode (sub-category, payment method, tags, location, notes), search, filter by category / payment method / date range, sort, delete |
+| **Dashboard** | Total, this month vs last month, average per day, category breakdown, recent activity |
+| **Analytics** | 6-month trend, spend by category and payment method, top 5 expenses |
+| **Categories** | Totals per category and sub-category |
+| **Budget** | Overall monthly limit and optional per-category limits, with progress and over-budget warnings |
+| **Settings** | Export to CSV, download / restore a JSON backup, delete all data |
+| **Privacy** | See [/privacy](app/privacy/page.tsx): no accounts, no analytics, no cookies |
 
-### Backend
-- **API**: Next.js API Routes (built-in)
-- **Database ORM**: [Prisma](https://www.prisma.io/) - Type-safe database client
-- **Database**: [PostgreSQL](https://www.postgresql.org/) - Robust relational database
-- **Authentication**: [NextAuth.js](https://next-auth.js.org/) or [Clerk](https://clerk.dev/)
+### Where your data lives
+
+Everything is saved in your browser's `localStorage` (keys `rupeemate_expenses_v1` and `rupeemate_budget_v1`). There is no server database yet, so data is **not** shared between devices, and clearing site data or using a private window deletes it. Use **Settings → Download backup** regularly.
+
+### Not built yet
+
+- **Receipts** (attach / scan) needs file storage and OCR. The page says so honestly.
+- **Accounts, sync between devices, bill splitting and settlement.** The "Shared with" field is only a note, and amounts are not divided.
+- **Recurring expenses** are labelled but not added automatically.
 
 ---
 
-## 🚀 Getting Started
+## 🛠️ Tech stack
 
-### Prerequisites
+- [Next.js 16](https://nextjs.org/) (App Router, Turbopack) with the React Compiler
+- [React 19](https://react.dev/) + [TypeScript](https://www.typescriptlang.org/) (strict)
+- [Tailwind CSS 4](https://tailwindcss.com/)
+- [lucide-react](https://lucide.dev/) icons
+- [Vitest](https://vitest.dev/) for unit tests
 
-Make sure you have the following installed:
-- **Node.js** v20+ ([Download](https://nodejs.org/))
-- **Git** ([Download](https://git-scm.com/))
+---
 
-### Installation
+## 🚀 Getting started
 
-1. **Install dependencies**
-   ```bash
-   npm install
-   ```
-
-2. **Run the development server**
-   ```bash
-   npm run dev
-   ```
-
-3. **Open your browser**
-   Navigate to [http://localhost:3000](http://localhost:3000)
-
-### Available Scripts
+**Prerequisites:** Node.js 20.9 or newer.
 
 ```bash
-npm run dev      # Start development server (with hot reload)
-npm run build    # Build production version
-npm run start    # Start production server
-npm run lint     # Run ESLint for code quality
+npm install
+npm run dev       # http://localhost:3000
 ```
+
+### Scripts
+
+```bash
+npm run dev        # development server with hot reload
+npm run build      # production build
+npm run start      # serve the production build
+npm run lint       # ESLint
+npm run typecheck  # TypeScript, no emit
+npm test           # unit tests
+```
+
+CI (`.github/workflows/ci.yml`) runs lint, typecheck, tests and the build on every push to `main` and every pull request.
 
 ---
 
-## 📁 Project Structure
+## 📁 Project structure
 
 ```
-rupeemate/
-├── app/                   # Next.js App Router pages
-│   ├── layout.tsx        # Root layout
-│   ├── page.tsx          # Home page
-│   └── api/              # API routes (future)
-├── components/           # Reusable React components
-│   └── ui/               # UI components
-├── lib/                  # Utility functions
-│   └── utils.ts          # Common utilities
-├── public/               # Static files
-├── package.json          # Dependencies
-└── tsconfig.json         # TypeScript config
+app/                  Routes (App Router): /, /expenses, /dashboard, /analytics,
+                      /categories, /budget, /settings, /receipts, /privacy
+components/           UI: layout shell, form, sidebar, toast, shared cards
+  AppDataProvider.tsx   single source of truth for expenses + budget (localStorage)
+lib/
+  expenses.ts         types, categories, date maths, aggregation, parsing, CSV
+  local-store.ts      localStorage store for useSyncExternalStore
+  download.ts         browser file download helper
+tests/                unit tests for lib/
 ```
+
+Dates are stored as plain `YYYY-MM-DD` strings and compared as local calendar days (never through `toISOString()`, which is UTC and would shift the day for users in India).
 
 ---
 
-## 📚 Learning Journey
+## 🌐 Deploying
 
-### What You'll Learn
-- React & TypeScript fundamentals
-- Next.js App Router and routing
-- Tailwind CSS for styling
-- Backend APIs with Next.js
-- Database design with Prisma
-- User authentication
-- Deployment to production
+The app is fully static (every route is prerendered) and needs **no environment variables**.
+
+**Vercel (simplest):** import the GitHub repository, keep the defaults (framework: Next.js, build command `npm run build`) and deploy.
+
+Any Node host also works: `npm run build` then `npm run start`.
+
+Security headers (`X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`) are set in [next.config.ts](next.config.ts). A strict Content-Security-Policy is not set because Next.js needs a per-request nonce for it.
+
+---
+
+## 🗺️ Roadmap
+
+1. Accounts and a database (PostgreSQL + Prisma) so data syncs across devices
+2. Bill splitting with settlement between friends
+3. Receipt upload and OCR
+4. Recurring transactions that add themselves
+5. Multi-currency
 
 ---
 
@@ -127,14 +108,4 @@ rupeemate/
 
 This project is for educational purposes.
 
----
-
-## 📧 Contact
-
-**Developer**: 1st Year MCA Student, India  
-**Project Start Date**: December 6, 2025  
-**Learning Journey**: From beginner to full-stack developer 🚀
-
----
-
-**Happy Coding! Let's build something amazing together.** 💪
+**Developer:** 1st Year MCA Student, India · **Started:** December 6, 2025
