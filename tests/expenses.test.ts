@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import {
+  applyExpenseUpdate,
   budgetUsage,
   categoryTotals,
   csvCell,
@@ -12,6 +13,7 @@ import {
   parseBudget,
   parseExpense,
   parseExpenses,
+  restoreExpenseAt,
   shiftMonth,
   toDateKey,
   type Expense,
@@ -169,5 +171,51 @@ describe("formatINR", () => {
     expect(formatINR(1234567)).toBe("₹12,34,567")
     expect(formatINR(99.5)).toBe("₹99.50")
     expect(formatINR(0)).toBe("₹0")
+  })
+})
+
+describe("editing and undoing", () => {
+  const list = [make({ id: "a", amount: 1 }), make({ id: "b", amount: 2 }), make({ id: "c", amount: 3 })]
+  const data = { amount: 99, category: "Bills", date: "2026-09-01", description: "Edited" }
+
+  it("replaces an expense in place, keeping its id and position", () => {
+    const result = applyExpenseUpdate(list, "b", data)
+    expect(result.map((e) => e.id)).toEqual(["a", "b", "c"])
+    expect(result[1]).toEqual({ ...data, id: "b" })
+    expect(result[0]).toBe(list[0]) // untouched items are not copied
+  })
+
+  it("drops fields that were cleared in the edit (no stale tags or notes)", () => {
+    const rich = [make({ id: "a", tags: ["x"], notes: "old", location: "Mall" })]
+    const result = applyExpenseUpdate(rich, "a", data)
+    expect(result[0].tags).toBeUndefined()
+    expect(result[0].notes).toBeUndefined()
+    expect(result[0].location).toBeUndefined()
+  })
+
+  it("keeps the edit when the expense was deleted meanwhile, instead of losing it", () => {
+    const result = applyExpenseUpdate(list, "gone", data)
+    expect(result).toHaveLength(4)
+    expect(result[0]).toEqual({ ...data, id: "gone" })
+  })
+
+  it("does not mutate the original list", () => {
+    const before = JSON.stringify(list)
+    applyExpenseUpdate(list, "a", data)
+    restoreExpenseAt(list, make({ id: "z" }), 1)
+    expect(JSON.stringify(list)).toBe(before)
+  })
+
+  it("restores a deleted expense at its old position", () => {
+    const removed = list[1]
+    const after = list.filter((e) => e.id !== "b")
+    expect(restoreExpenseAt(after, removed, 1).map((e) => e.id)).toEqual(["a", "b", "c"])
+  })
+
+  it("clamps out-of-range positions and never duplicates", () => {
+    const extra = make({ id: "z" })
+    expect(restoreExpenseAt(list, extra, 99).map((e) => e.id)).toEqual(["a", "b", "c", "z"])
+    expect(restoreExpenseAt(list, extra, -5).map((e) => e.id)).toEqual(["z", "a", "b", "c"])
+    expect(restoreExpenseAt(list, list[0], 0)).toBe(list) // already there: unchanged
   })
 })

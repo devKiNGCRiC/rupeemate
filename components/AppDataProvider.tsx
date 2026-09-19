@@ -10,8 +10,10 @@
 import { createContext, useCallback, useContext, useMemo, useSyncExternalStore, type ReactNode } from "react"
 import { createLocalStore } from "@/lib/local-store"
 import {
+  applyExpenseUpdate,
   parseBudget,
   parseExpenses,
+  restoreExpenseAt,
   type Budget,
   type Expense,
   type ExpenseData,
@@ -32,7 +34,11 @@ interface AppData {
   budget: Budget
   /** Each write returns false when the browser blocked saving (data is kept for this session only). */
   addExpense: (data: ExpenseData) => boolean
+  /** Replace an existing expense, keeping its id and position. */
+  updateExpense: (id: string, data: ExpenseData) => boolean
   deleteExpense: (id: string) => boolean
+  /** Undo a delete: put the expense back where it was. */
+  restoreExpense: (expense: Expense, index: number) => boolean
   importExpenses: (incoming: Expense[]) => { added: number; skipped: number; saved: boolean }
   clearExpenses: () => boolean
   saveBudget: (budget: Budget) => boolean
@@ -64,6 +70,14 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     return expenseStore.set(JSON.stringify([expense, ...currentExpenses()]))
   }, [])
 
+  const updateExpense = useCallback((id: string, data: ExpenseData) => {
+    return expenseStore.set(JSON.stringify(applyExpenseUpdate(currentExpenses(), id, data)))
+  }, [])
+
+  const restoreExpense = useCallback((expense: Expense, index: number) => {
+    return expenseStore.set(JSON.stringify(restoreExpenseAt(currentExpenses(), expense, index)))
+  }, [])
+
   const deleteExpense = useCallback((id: string) => {
     return expenseStore.set(JSON.stringify(currentExpenses().filter((e) => e.id !== id)))
   }, [])
@@ -86,13 +100,15 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       expenses,
       budget,
       addExpense,
+      updateExpense,
       deleteExpense,
+      restoreExpense,
       importExpenses,
       clearExpenses,
       saveBudget,
       clearBudget,
     }),
-    [rawExpenses, expenses, budget, addExpense, deleteExpense, importExpenses, clearExpenses, saveBudget, clearBudget],
+    [rawExpenses, expenses, budget, addExpense, updateExpense, deleteExpense, restoreExpense, importExpenses, clearExpenses, saveBudget, clearBudget],
   )
 
   return <AppDataContext.Provider value={value}>{children}</AppDataContext.Provider>

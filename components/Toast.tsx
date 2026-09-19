@@ -15,6 +15,8 @@ interface ToastProps {
   type: ToastType
   onClose: () => void
   duration?: number
+  /** Optional button shown next to the message, e.g. Undo. Closes the toast when clicked. */
+  action?: { label: string; onClick: () => void }
 }
 
 const icons = {
@@ -44,7 +46,7 @@ const colors = {
   },
 }
 
-export default function Toast({ message, type, onClose, duration = 3000 }: ToastProps) {
+export default function Toast({ message, type, onClose, duration = 3000, action }: ToastProps) {
   // Keep the latest onClose in a ref so a parent re-render (new function each
   // time) does not restart the auto-dismiss timer.
   const onCloseRef = useRef(onClose)
@@ -73,6 +75,18 @@ export default function Toast({ message, type, onClose, duration = 3000 }: Toast
         <p className={`font-rajdhani text-sm ${colorScheme.text} flex-1 leading-relaxed`}>
           {message}
         </p>
+        {action && (
+          <button
+            type="button"
+            onClick={() => {
+              action.onClick()
+              onClose()
+            }}
+            className={`px-3 py-1 rounded-lg border ${colorScheme.border} font-orbitron text-[10px] uppercase tracking-wider ${colorScheme.text} hover:bg-white/10 transition-colors cursor-pointer shrink-0`}
+          >
+            {action.label}
+          </button>
+        )}
         <button
           type="button"
           onClick={onClose}

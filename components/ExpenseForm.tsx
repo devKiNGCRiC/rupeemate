@@ -7,11 +7,11 @@
 
 "use client"
 
-import { useId, useState } from "react"
+import { useEffect, useId, useRef, useState } from "react"
 import {
-  Plus, AlertCircle, IndianRupee, CreditCard, Wallet as WalletIcon,
+  Plus, Pencil, AlertCircle, IndianRupee, CreditCard, Wallet as WalletIcon,
   Smartphone, Building, Tag, FileText, Repeat, MapPin, Calendar,
-  Clock, Users, ChevronDown, Sparkles
+  Clock, Users, ChevronDown, Sparkles, Save, X
 } from "lucide-react"
 import {
   CATEGORIES,
@@ -19,15 +19,23 @@ import {
   PAYMENT_METHODS,
   RECURRING_OPTIONS,
   isValidDateKey,
+  type Expense,
   type ExpenseData,
 } from "@/lib/expenses"
 
 export type { ExpenseData }
 
 interface ExpenseFormProps {
-  onAddExpense: (expense: ExpenseData) => void
+  /** Called with the validated data, both when adding and when saving an edit. */
+  onSubmit: (expense: ExpenseData) => void
   mode: "basic" | "advanced"
   onModeChange: (mode: "basic" | "advanced") => void
+  /**
+   * When set, the form edits this expense instead of adding a new one. Render
+   * it with key={expense.id} so the fields start from the right values.
+   */
+  editing?: Expense | null
+  onCancelEdit?: () => void
 }
 
 const PAYMENT_ICONS = {
@@ -39,26 +47,36 @@ const PAYMENT_ICONS = {
 
 const splitList = (value: string) => value.split(",").map((t) => t.trim()).filter(Boolean)
 
-export default function ExpenseForm({ onAddExpense, mode, onModeChange }: ExpenseFormProps) {
+export default function ExpenseForm({ onSubmit, mode: modeProp, onModeChange, editing = null, onCancelEdit }: ExpenseFormProps) {
   const uid = useId()
   const id = (name: string) => `${uid}-${name}`
 
+  // Editing always shows every field, so saving can never silently drop
+  // details (tags, notes, ...) that an Advanced-mode expense already has.
+  const mode = editing ? "advanced" : modeProp
+  const amountRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (editing) amountRef.current?.focus({ preventScroll: true })
+  }, [editing])
+
   // Basic fields
-  const [amount, setAmount] = useState("")
-  const [category, setCategory] = useState("Food")
-  const [subCategory, setSubCategory] = useState("")
-  const [date, setDate] = useState("")
-  const [time, setTime] = useState("")
-  const [description, setDescription] = useState("")
+  const [amount, setAmount] = useState(editing ? String(editing.amount) : "")
+  const [category, setCategory] = useState(editing?.category ?? "Food")
+  const [subCategory, setSubCategory] = useState(editing?.subCategory ?? "")
+  const [date, setDate] = useState(editing?.date ?? "")
+  const [time, setTime] = useState(editing?.time ?? "")
+  const [description, setDescription] = useState(editing?.description ?? "")
 
   // Advanced fields
-  const [paymentMethod, setPaymentMethod] = useState<string>("Cash")
-  const [tags, setTags] = useState("")
-  const [notes, setNotes] = useState("")
-  const [isRecurring, setIsRecurring] = useState(false)
-  const [recurringFrequency, setRecurringFrequency] = useState("monthly")
-  const [location, setLocation] = useState("")
-  const [splitWith, setSplitWith] = useState("")
+  // New expenses default to Cash; an existing expense keeps whatever it had (possibly nothing)
+  const [paymentMethod, setPaymentMethod] = useState<string>(editing ? (editing.paymentMethod ?? "") : "Cash")
+  const [tags, setTags] = useState(editing?.tags?.join(", ") ?? "")
+  const [notes, setNotes] = useState(editing?.notes ?? "")
+  const [isRecurring, setIsRecurring] = useState(editing?.isRecurring ?? false)
+  const [recurringFrequency, setRecurringFrequency] = useState(editing?.recurringFrequency ?? "monthly")
+  const [location, setLocation] = useState(editing?.location ?? "")
+  const [splitWith, setSplitWith] = useState(editing?.splitWith?.join(", ") ?? "")
 
   const [error, setError] = useState("")
 
@@ -99,7 +117,7 @@ export default function ExpenseForm({ onAddExpense, mode, onModeChange }: Expens
     if (mode === "advanced") {
       expenseData.subCategory = subCategory || undefined
       expenseData.time = time || undefined
-      expenseData.paymentMethod = paymentMethod
+      expenseData.paymentMethod = paymentMethod || undefined
       expenseData.tags = tags ? splitList(tags) : undefined
       expenseData.notes = notes.trim() || undefined
       expenseData.isRecurring = isRecurring || undefined
@@ -108,9 +126,9 @@ export default function ExpenseForm({ onAddExpense, mode, onModeChange }: Expens
       expenseData.splitWith = splitWith ? splitList(splitWith) : undefined
     }
 
-    onAddExpense(expenseData)
+    onSubmit(expenseData)
 
-    // Reset form
+    // Reset form (an edit unmounts this form afterwards, so this only matters when adding)
     setAmount("")
     setDate("")
     setTime("")
@@ -132,19 +150,20 @@ export default function ExpenseForm({ onAddExpense, mode, onModeChange }: Expens
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-linear-to-br from-cyan-400/20 to-pink-400/20 flex items-center justify-center">
-              <Plus className="w-5 h-5 neon-text-cyan" />
+              {editing ? <Pencil className="w-5 h-5 neon-text-pink" /> : <Plus className="w-5 h-5 neon-text-cyan" />}
             </div>
             <div>
               <h2 className="text-xl font-orbitron font-bold neon-text-cyan tracking-wider">
-                ADD EXPENSE
+                {editing ? "EDIT EXPENSE" : "ADD EXPENSE"}
               </h2>
               <p className="text-[10px] font-rajdhani text-cyan-100/50 uppercase tracking-wider">
-                {mode === "basic" ? "Quick Entry" : "Detailed Tracking"}
+                {editing ? "Changing a saved expense" : mode === "basic" ? "Quick Entry" : "Detailed Tracking"}
               </p>
             </div>
           </div>
 
-          {/* Mode Toggle */}
+          {/* Mode Toggle (hidden while editing: editing always shows every field) */}
+          {!editing && (
           <div className="flex items-center gap-2 p-1 rounded-xl bg-black/40 border border-cyan-400/20 relative z-10" role="group" aria-label="Form mode">
             <button
               type="button"
@@ -172,6 +191,7 @@ export default function ExpenseForm({ onAddExpense, mode, onModeChange }: Expens
               ADVANCED
             </button>
           </div>
+          )}
         </div>
 
         <div className="w-full h-px bg-linear-to-r from-cyan-400/30 via-pink-400/30 to-transparent"></div>
@@ -185,7 +205,14 @@ export default function ExpenseForm({ onAddExpense, mode, onModeChange }: Expens
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-5" noValidate>
+      <form
+        onSubmit={handleSubmit}
+        onKeyDown={(e) => {
+          if (e.key === "Escape" && editing && onCancelEdit) onCancelEdit()
+        }}
+        className="space-y-5"
+        noValidate
+      >
 
         {/* ============================================
             BASIC FIELDS (Always Visible)
@@ -205,6 +232,7 @@ export default function ExpenseForm({ onAddExpense, mode, onModeChange }: Expens
               </div>
               <input
                 id={id("amount")}
+                ref={amountRef}
                 type="text"
                 inputMode="decimal"
                 autoComplete="off"
@@ -387,7 +415,7 @@ export default function ExpenseForm({ onAddExpense, mode, onModeChange }: Expens
                       key={method}
                       type="button"
                       aria-pressed={paymentMethod === method}
-                      onClick={() => setPaymentMethod(method)}
+                      onClick={() => setPaymentMethod(paymentMethod === method ? "" : method)}
                       className={`
                         p-2.5 rounded-xl font-rajdhani font-medium text-xs
                         transition-all duration-300 flex items-center justify-center gap-2 cursor-pointer
@@ -514,13 +542,34 @@ export default function ExpenseForm({ onAddExpense, mode, onModeChange }: Expens
         )}
 
         {/* Submit Button */}
-        <button
-          type="submit"
-          className="w-full py-4 min-h-13 rounded-xl font-orbitron text-sm tracking-wider flex items-center justify-center gap-2 bg-linear-to-r from-cyan-500/20 to-pink-500/20 border border-cyan-400/40 hover:border-cyan-400/70 hover:shadow-lg hover:shadow-cyan-400/20 text-cyan-100 hover:text-white transition-all duration-300 group cursor-pointer active:scale-[0.98]"
-        >
-          <Plus className="w-4 h-4 group-hover:rotate-90 transition-transform duration-300" />
-          ADD EXPENSE
-        </button>
+        <div className="flex flex-col-reverse sm:flex-row gap-3">
+          {editing && (
+            <button
+              type="button"
+              onClick={onCancelEdit}
+              className="sm:w-40 py-4 min-h-13 rounded-xl font-orbitron text-sm tracking-wider flex items-center justify-center gap-2 bg-black/40 border border-cyan-400/20 hover:border-cyan-400/40 text-cyan-100/70 hover:text-cyan-100 transition-all duration-300 cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+              CANCEL
+            </button>
+          )}
+          <button
+            type="submit"
+            className="flex-1 py-4 min-h-13 rounded-xl font-orbitron text-sm tracking-wider flex items-center justify-center gap-2 bg-linear-to-r from-cyan-500/20 to-pink-500/20 border border-cyan-400/40 hover:border-cyan-400/70 hover:shadow-lg hover:shadow-cyan-400/20 text-cyan-100 hover:text-white transition-all duration-300 group cursor-pointer active:scale-[0.98]"
+          >
+            {editing ? (
+              <>
+                <Save className="w-4 h-4" />
+                SAVE CHANGES
+              </>
+            ) : (
+              <>
+                <Plus className="w-4 h-4 group-hover:rotate-90 transition-transform duration-300" />
+                ADD EXPENSE
+              </>
+            )}
+          </button>
+        </div>
 
         {/* Mode hint */}
         {mode === "basic" && (

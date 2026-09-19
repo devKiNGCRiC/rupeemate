@@ -253,6 +253,30 @@ export function budgetUsage(spent: number, limit: number): number | null {
 }
 
 /* ---------------------------------------------
+   LIST EDITING (pure, so the rules are easy to test)
+   --------------------------------------------- */
+
+/**
+ * Replace the expense with `id` by `data`, keeping its id and its position in
+ * the list. If it no longer exists (for example it was deleted in another
+ * tab while being edited) the edit is kept by adding it back at the front, so
+ * the user's work is never silently lost.
+ */
+export function applyExpenseUpdate(list: Expense[], id: string, data: ExpenseData): Expense[] {
+  const updated: Expense = { ...data, id }
+  const index = list.findIndex((e) => e.id === id)
+  if (index === -1) return [updated, ...list]
+  return list.map((e, i) => (i === index ? updated : e))
+}
+
+/** Put a deleted expense back at (or as close as possible to) its old position. Ignores duplicates. */
+export function restoreExpenseAt(list: Expense[], expense: Expense, index: number): Expense[] {
+  if (list.some((e) => e.id === expense.id)) return list
+  const at = Math.min(Math.max(index, 0), list.length)
+  return [...list.slice(0, at), expense, ...list.slice(at)]
+}
+
+/* ---------------------------------------------
    PARSING (data read back from localStorage or an imported file)
    --------------------------------------------- */
 

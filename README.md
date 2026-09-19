@@ -10,7 +10,7 @@ RupeeMate is a learning project by a 1st year MCA student, built to practise ful
 
 | Area | What you can do |
 | --- | --- |
-| **Expenses** | Add expenses in Basic or Advanced mode (sub-category, payment method, tags, location, notes), search, filter by category / payment method / date range, sort, delete |
+| **Expenses** | Add expenses in Basic or Advanced mode (sub-category, payment method, tags, location, notes), search, filter by category / payment method / date range, sort, **edit**, delete with **undo** |
 | **Dashboard** | Total, this month vs last month, average per day, category breakdown, recent activity |
 | **Analytics** | 6-month trend, spend by category and payment method, top 5 expenses |
 | **Categories** | Totals per category and sub-category |

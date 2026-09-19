@@ -12,7 +12,7 @@
 
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import ExpenseForm from "@/components/ExpenseForm"
 import AdvancedModePopup from "@/components/AdvancedModePopup"
 import Toast, { ToastType } from "@/components/Toast"
@@ -34,7 +34,7 @@ import {
 } from "@/lib/expenses"
 import {
   Trash2, Calendar, TrendingUp, Zap, MapPin, Tag, CreditCard, Users, Repeat,
-  Search, X, SlidersHorizontal, ArrowUpDown, Download, HardDrive
+  Search, X, SlidersHorizontal, ArrowUpDown, Download, HardDrive, Pencil
 } from "lucide-react"
 
 type SortBy = "date-desc" | "date-asc" | "amount-desc" | "amount-asc"
@@ -43,6 +43,7 @@ interface ToastState {
   show: boolean
   message: string
   type: ToastType
+  action?: { label: string; onClick: () => void }
 }
 
 const POPUP_KEY = "rupeemate_seen_advanced_popup"
@@ -55,7 +56,7 @@ const DATE_CHIPS: { value: DateFilter; label: string }[] = [
 ]
 
 export default function ExpensesPage() {
-  const { ready, expenses, addExpense, deleteExpense } = useAppData()
+  const { ready, expenses, addExpense, updateExpense, deleteExpense, restoreExpense } = useAppData()
   const [formMode, setFormMode] = useState<"basic" | "advanced">("basic")
   const [showPopup, setShowPopup] = useState(false)
   const [toast, setToast] = useState<ToastState>({ show: false, message: "", type: "success" })
@@ -69,9 +70,23 @@ export default function ExpensesPage() {
   const [customDateRange, setCustomDateRange] = useState({ start: "", end: "" })
   const [sortBy, setSortBy] = useState<SortBy>("date-desc")
 
-  const showToast = (message: string, type: ToastType) => {
-    setToast({ show: true, message, type })
+  // Edit state. The expense is looked up by id so the form always shows saved data;
+  // if it disappears (deleted here or in another tab) the form goes back to "add".
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const editing = useMemo(() => expenses.find((e) => e.id === editingId) ?? null, [expenses, editingId])
+  const formRef = useRef<HTMLDivElement>(null)
+
+  const showToast = (message: string, type: ToastType, action?: ToastState["action"]) => {
+    setToast({ show: true, message, type, action })
   }
+
+  const startEdit = (id: string) => {
+    setEditingId(id)
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    formRef.current?.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" })
+  }
+
+  const cancelEdit = () => setEditingId(null)
 
   // Check if user has seen the popup before (storage can be blocked, so guard it)
   useEffect(() => {
@@ -105,18 +120,29 @@ export default function ExpensesPage() {
     handleClosePopup()
   }
 
-  const handleAddExpense = (newExpense: ExpenseData) => {
-    const saved = addExpense(newExpense)
+  const handleSubmitExpense = (data: ExpenseData) => {
+    const isEdit = !!editing
+    const saved = editing ? updateExpense(editing.id, data) : addExpense(data)
+    if (editing) setEditingId(null)
     if (saved) {
-      showToast("✨ Expense added successfully!", "success")
+      showToast(isEdit ? "✅ Expense updated" : "✨ Expense added successfully!", "success")
     } else {
-      showToast("Added, but your browser blocked saving. It will be lost when you close this tab.", "error")
+      showToast("Done, but your browser blocked saving. It will be lost when you close this tab.", "error")
     }
   }
 
   const handleDeleteExpense = (id: string) => {
+    const index = expenses.findIndex((e) => e.id === id)
+    const removed = expenses[index]
+    if (!removed) return
     deleteExpense(id)
-    showToast("🗑️ Expense deleted", "info")
+    if (editingId === id) setEditingId(null)
+    showToast("🗑️ Expense deleted", "info", {
+      label: "Undo",
+      onClick: () => {
+        restoreExpense(removed, index)
+      },
+    })
   }
 
   // Filter and search logic
@@ -267,11 +293,14 @@ export default function ExpensesPage() {
         {/* ========================================
             📝 EXPENSE FORM
             ======================================== */}
-        <div className="max-w-2xl mx-auto mb-12 md:mb-16">
+        <div ref={formRef} className="max-w-2xl mx-auto mb-12 md:mb-16 scroll-mt-24">
           <ExpenseForm
-            onAddExpense={handleAddExpense}
+            key={editing?.id ?? "new"}
+            onSubmit={handleSubmitExpense}
             mode={formMode}
             onModeChange={setFormMode}
+            editing={editing}
+            onCancelEdit={cancelEdit}
           />
         </div>
 
@@ -585,7 +614,11 @@ export default function ExpensesPage() {
             {filteredAndSortedExpenses.map((expense, index) => (
               <li
                 key={expense.id}
-                className="group holo-card p-5 rounded-2xl relative overflow-hidden border border-cyan-400/10 hover:border-cyan-400/30 transition-all duration-300 animate-fade-in-up"
+                className={`group holo-card p-5 rounded-2xl relative overflow-hidden border transition-all duration-300 animate-fade-in-up ${
+                  editing?.id === expense.id
+                    ? "border-pink-400/60 ring-1 ring-pink-400/40"
+                    : "border-cyan-400/10 hover:border-cyan-400/30"
+                }`}
                 style={{ animationDelay: `${Math.min(index, 12) * 0.05}s`, animationFillMode: 'backwards' }}
               >
                 {/* Gradient accent bar */}
@@ -658,12 +691,21 @@ export default function ExpensesPage() {
                   </div>
 
                   {/* Right: Amount & Actions */}
-                  <div className="flex items-center gap-4 justify-between sm:justify-end w-full sm:w-auto">
+                  <div className="flex items-center gap-3 justify-between sm:justify-end w-full sm:w-auto">
                     <div className="text-right">
                       <p className="text-2xl font-bungee neon-text-pink">
                         {formatINR(expense.amount)}
                       </p>
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => startEdit(expense.id)}
+                      className="p-2.5 rounded-xl bg-cyan-400/5 border border-cyan-400/20 hover:bg-cyan-400/20 hover:border-cyan-400/40 transition-all duration-300 group/edit cursor-pointer"
+                      title="Edit expense"
+                      aria-label={`Edit expense: ${expense.description}`}
+                    >
+                      <Pencil className="w-4 h-4 neon-text-cyan group-hover/edit:scale-110 transition-transform" />
+                    </button>
                     <button
                       type="button"
                       onClick={() => handleDeleteExpense(expense.id)}
@@ -686,6 +728,8 @@ export default function ExpensesPage() {
         <Toast
           message={toast.message}
           type={toast.type}
+          action={toast.action}
+          duration={toast.action ? 7000 : 3000}
           onClose={() => setToast((t) => ({ ...t, show: false }))}
         />
       )}
