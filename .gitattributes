@@ -1,0 +1,4 @@
+# Normalise line endings so Windows and Linux contributors do not create noisy diffs
+* text=auto
+*.png binary
+*.ico binary
