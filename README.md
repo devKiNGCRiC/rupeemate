@@ -4,6 +4,27 @@
 
 RupeeMate is a learning project by a 1st year MCA student, built to practise full-stack development with a real, usable app.
 
+![RupeeMate home page](docs/screenshots/home.png)
+
+---
+
+## 📸 Screenshots
+
+The screenshots below use sample data.
+
+| Dashboard | Expenses |
+| --- | --- |
+| ![Dashboard with totals, category breakdown and recent activity](docs/screenshots/dashboard.png) | ![Add expense form in Basic mode](docs/screenshots/expenses.png) |
+| **Analytics** | **Budget** |
+| ![Analytics with 6-month trend and summary stats](docs/screenshots/analytics.png) | ![Monthly and per-category budget limits with progress](docs/screenshots/budget.png) |
+| **Categories** | **Settings** |
+| ![Spending per category and sub-category](docs/screenshots/categories.png) | ![CSV export, JSON backup and restore](docs/screenshots/settings.png) |
+
+<p align="center">
+  <img src="docs/screenshots/mobile.png" alt="Expenses page on a phone" width="300">
+  <br><em>Mobile layout</em>
+</p>
+
 ---
 
 ## ✅ What works today
@@ -76,6 +97,7 @@ lib/
   local-store.ts      localStorage store for useSyncExternalStore
   download.ts         browser file download helper
 tests/                unit tests for lib/
+docs/screenshots/     README screenshots
 ```
 
 Dates are stored as plain `YYYY-MM-DD` strings and compared as local calendar days (never through `toISOString()`, which is UTC and would shift the day for users in India).
